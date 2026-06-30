@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seguimiento de Facturas · UA</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+  :root {
+    --azul: #00528F; --azul-oscuro: #002447; --teal: #008091; --cyan: #00C4DF; --rosa: #ff436e;
+    --bg: #f0f4f8; --white: #ffffff;
+    --gray-50: #f8fafc; --gray-100: #f1f5f9; --gray-200: #e2e8f0;
+    --gray-400: #94a3b8; --gray-500: #64748b; --gray-700: #334155; --gray-900: #0f172a;
+    --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+    --pay-ok: #10b981; --pay-warn: #f59e0b; --pay-urgent: #f97316; --pay-overdue: #dc2626;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Poppins', sans-serif; background: var(--bg); color: var(--gray-900); min-height: 100vh; }
+
+  /* HEADER */
+  header { background: var(--azul-oscuro); padding: 0 32px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,.2); }
+  .header-brand { display: flex; align-items: center; gap: 12px; }
+  .header-logo { width: 36px; height: 36px; background: linear-gradient(135deg, var(--azul), var(--teal)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; font-size: 13px; letter-spacing: -0.5px; }
+  .header-title { color: white; font-size: 15px; font-weight: 600; }
+  .header-sub { color: rgba(255,255,255,.45); font-size: 11px; }
+  .header-actions { display: flex; align-items: center; gap: 10px; }
+  .btn-config { background: rgba(255,255,255,.1); color: rgba(255,255,255,.8); border: 1px solid rgba(255,255,255,.15); padding: 7px 14px; border-radius: 8px; font-family: 'Poppins', sans-serif; font-size: 12px; font-weight: 500; cursor: pointer; transition: all .15s; }
+  .btn-config:hover { background: rgba(255,255,255,.18); }
+  .btn-nueva { background: var(--cyan); color: var(--azul-oscuro); border: none; padding: 8px 18px; border-radius: 8px; font-family: 'Poppins', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+  .btn-nueva:hover { background: #00d9f5; transform: translateY(-1px); }
+  .notif-bell { position: relative; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.15); border-radius: 8px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; transition: all .15s; }
+  .notif-bell:hover { background: rgba(255,255,255,.18); }
+  .notif-badge { position: absolute; top: -4px; right: -4px; background: var(--rosa); color: white; border-radius: 10px; min-width: 18px; height: 18px; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 4px; border: 2px solid var(--azul-oscuro); }
+
+  /* LAYOUT */
+  .app { display: flex; height: calc(100vh - 60px); }
+
+  /* SIDEBAR */
+  .sidebar { width: 340px; min-width: 340px; background: var(--white); border-right: 1px solid var(--gray-200); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-search { padding: 16px; border-bottom: 1px solid var(--gray-200); }
+  .sidebar-search input { width: 100%; padding: 9px 14px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-family: 'Poppins', sans-serif; font-size: 13px; color: var(--gray-700); outline: none; transition: border-color .15s; }
+  .sidebar-search input:focus { border-color: var(--azul); }
+  .sidebar-filters { padding: 10px 16px; border-bottom: 1px solid var(--gray-200); display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-chip { padding: 4px 12px; border-radius: 20px; border: 1.5px solid var(--gray-200); background: transparent; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 500; color: var(--gray-500); cursor: pointer; transition: all .15s; }
+  .filter-chip.active { background: var(--azul); border-color: var(--azul); color: white; }
+  .facturas-list { flex: 1; overflow-y: auto; padding: 8px; }
+
+  /* FACTURA CARD */
+  .factura-card { padding: 14px; border-radius: 10px; cursor: pointer; transition: all .15s; border: 1.5px solid transparent; margin-bottom: 4px; border-left: 4px solid transparent; }
+  .factura-card:hover { background: var(--gray-50); }
+  .factura-card.active { background: #e8f4fd; border-color: var(--azul); }
+  .factura-card.pay-ok    { border-left-color: var(--pay-ok); }
+  .factura-card.pay-warn  { border-left-color: var(--pay-warn); }
+  .factura-card.pay-urgent{ border-left-color: var(--pay-urgent); }
+  .factura-card.pay-overdue { border-left-color: var(--pay-overdue); }
+  .factura-card.flow-overdue { border-left-color: var(--rosa); }
+  .fc-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+  .fc-proveedor { font-size: 13px; font-weight: 600; color: var(--gray-900); }
+  .fc-monto { font-size: 13px; font-weight: 700; color: var(--azul); }
+  .fc-mid { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .fc-num { font-size: 11px; color: var(--gray-500); }
+  .fc-fecha { font-size: 11px; color: var(--gray-400); margin-left: auto; }
+  .fc-step-bar { display: flex; gap: 3px; margin-bottom: 5px; }
+  .step-dot { height: 4px; flex: 1; border-radius: 2px; background: var(--gray-200); }
+  .step-dot.done { background: var(--success); }
+  .step-dot.active { background: var(--cyan); }
+  .step-dot.pending { background: var(--warning); }
+  .fc-status-label { font-size: 10px; color: var(--gray-500); }
+  .fc-pay-bar { margin-top: 6px; }
+  .fc-pay-label { font-size: 10px; font-weight: 600; display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .pay-track { height: 5px; background: var(--gray-100); border-radius: 3px; overflow: hidden; }
+  .pay-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+  .pay-fill.ok      { background: var(--pay-ok); }
+  .pay-fill.warn    { background: var(--pay-warn); }
+  .pay-fill.urgent  { background: var(--pay-urgent); }
+  .pay-fill.overdue { background: var(--pay-overdue); }
+
+  /* DETAIL */
+  .detail-panel { flex: 1; overflow-y: auto; padding: 32px; }
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--gray-400); gap: 12px; }
+  .empty-state-icon { font-size: 48px; opacity: .4; }
+  .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; }
+  .detail-h1 { font-size: 22px; font-weight: 700; color: var(--azul-oscuro); }
+  .detail-sub { font-size: 13px; color: var(--gray-500); margin-top: 2px; }
+  .detail-monto { font-size: 28px; font-weight: 700; color: var(--azul); }
+  .detail-monto-label { font-size: 11px; color: var(--gray-400); text-align: right; }
+
+  /* PAY COUNTDOWN CARD */
+  .pay-countdown {
+    border-radius: var(--radius); padding: 20px 24px; margin-bottom: 24px;
+    display: flex; align-items: center; gap: 20px;
+    box-shadow: var(--shadow);
+  }
+  .pay-countdown.ok      { background: #f0fdf4; border: 1.5px solid #bbf7d0; }
+  .pay-countdown.warn    { background: #fffbeb; border: 1.5px solid #fde68a; }
+  .pay-countdown.urgent  { background: #fff7ed; border: 1.5px solid #fed7aa; }
+  .pay-countdown.overdue { background: #fef2f2; border: 1.5px solid #fecaca; }
+  .pay-dial { width: 56px; height: 56px; flex-shrink: 0; }
+  .pay-dial svg { width: 56px; height: 56px; }
+  .pay-countdown-info { flex: 1; }
+  .pay-countdown-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 2px; }
+  .pay-countdown.ok     .pay-countdown-title { color: #15803d; }
+  .pay-countdown.warn   .pay-countdown-title { color: #92400e; }
+  .pay-countdown.urgent .pay-countdown-title { color: #c2410c; }
+  .pay-countdown.overdue .pay-countdown-title { color: #b91c1c; }
+  .pay-countdown-days { font-size: 26px; font-weight: 700; line-height: 1; }
+  .pay-countdown.ok     .pay-countdown-days { color: #15803d; }
+  .pay-countdown.warn   .pay-countdown-days { color: #92400e; }
+  .pay-countdown.urgent .pay-countdown-days { color: #c2410c; }
+  .pay-countdown.overdue .pay-countdown-days { color: #b91c1c; }
+  .pay-countdown-sub { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+  .pay-countdown-bar { flex: 1; }
+  .pay-big-track { height: 10px; background: var(--gray-200); border-radius: 6px; overflow: hidden; margin-top: 4px; }
+  .pay-big-fill { height: 100%; border-radius: 6px; transition: width .5s; }
+
+  /* PROGRESS */
+  .progress-track { background: var(--white); border-radius: var(--radius); padding: 24px; margin-bottom: 24px; box-shadow: var(--shadow); }
+  .pt-title { font-size: 12px; font-weight: 600; color: var(--gray-500); letter-spacing: .8px; text-transform: uppercase; margin-bottom: 20px; }
+  .steps-visual { display: flex; align-items: flex-start; position: relative; overflow-x: auto; padding-bottom: 8px; }
+  .step-item { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 80px; position: relative; }
+  .step-item:not(:last-child)::after { content: ''; position: absolute; top: 18px; left: 50%; width: 100%; height: 2px; background: var(--gray-200); z-index: 0; }
+  .step-item.done:not(:last-child)::after { background: var(--success); }
+  .step-circle { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background: var(--gray-100); border: 2px solid var(--gray-200); color: var(--gray-400); position: relative; z-index: 1; transition: all .3s; }
+  .step-item.done .step-circle { background: var(--success); border-color: var(--success); color: white; }
+  .step-item.current .step-circle { background: var(--azul); border-color: var(--azul); color: white; box-shadow: 0 0 0 4px rgba(0,82,143,.15); }
+  .step-item.overdue .step-circle { background: var(--rosa); border-color: var(--rosa); color: white; animation: pulse 2s infinite; }
+  .step-label { font-size: 10px; color: var(--gray-500); margin-top: 8px; text-align: center; line-height: 1.3; font-weight: 500; }
+  .step-item.done .step-label { color: var(--success); }
+  .step-item.current .step-label { color: var(--azul); font-weight: 600; }
+  .step-item.overdue .step-label { color: var(--rosa); font-weight: 600; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,67,110,.4)} 50%{box-shadow:0 0 0 6px rgba(255,67,110,0)} }
+
+  /* ACTION CARDS */
+  .action-card { background: var(--white); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; box-shadow: var(--shadow); border-left: 4px solid var(--cyan); }
+  .action-card.completed { border-left-color: var(--success); }
+  .action-card.waiting { border-left-color: var(--gray-200); opacity: .65; }
+  .action-card.overdue { border-left-color: var(--rosa); }
+  .ac-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .ac-title { font-size: 14px; font-weight: 700; color: var(--gray-900); }
+  .ac-badge { font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 20px; letter-spacing: .4px; text-transform: uppercase; }
+  .badge-completado { background: #f0fdf4; color: #15803d; }
+  .badge-esperando { background: var(--gray-100); color: var(--gray-500); }
+  .badge-actual { background: #eff6ff; color: #1d4ed8; }
+  .badge-vencido { background: #fff1f2; color: #be123c; }
+  .ac-by { font-size: 12px; color: var(--gray-500); margin-bottom: 4px; }
+  .ac-date-done { font-size: 11px; color: var(--success); font-weight: 500; }
+  .ac-overdue-alert { background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #be123c; font-weight: 500; margin-bottom: 12px; }
+
+  .ac-form { display: flex; flex-direction: column; gap: 12px; }
+  .ac-form input, .ac-form textarea, .ac-form select { padding: 10px 14px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-family: 'Poppins', sans-serif; font-size: 13px; color: var(--gray-700); outline: none; transition: border-color .15s; background: var(--gray-50); }
+  .ac-form input:focus, .ac-form textarea:focus, .ac-form select:focus { border-color: var(--azul); background: white; }
+  .ac-form label { font-size: 11px; font-weight: 600; color: var(--gray-500); margin-bottom: -6px; text-transform: uppercase; letter-spacing: .5px; }
+  .ac-form textarea { resize: vertical; min-height: 70px; }
+  .btn-aprobar { background: var(--azul); color: white; border: none; padding: 11px 24px; border-radius: 8px; font-family: 'Poppins', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; align-self: flex-start; }
+  .btn-aprobar:hover { background: #003e6e; transform: translateY(-1px); }
+  .btn-rechazar { background: transparent; color: var(--danger); border: 1.5px solid var(--danger); padding: 10px 20px; border-radius: 8px; font-family: 'Poppins', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; align-self: flex-start; }
+  .btn-rechazar:hover { background: #fef2f2; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .info-grid { background: var(--white); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; box-shadow: var(--shadow); }
+  .ig-title { font-size: 12px; font-weight: 600; color: var(--gray-500); letter-spacing: .8px; text-transform: uppercase; margin-bottom: 16px; }
+  .ig-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .ig-label { font-size: 10px; color: var(--gray-400); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px; }
+  .ig-value { font-size: 13px; color: var(--gray-900); font-weight: 500; }
+
+  .pdf-section { background: var(--white); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow); }
+  .pdf-link { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--gray-50); border: 1.5px solid var(--gray-200); border-radius: 8px; color: var(--azul); font-size: 13px; font-weight: 500; cursor: pointer; transition: all .15s; }
+  .pdf-link:hover { background: #e8f4fd; border-color: var(--azul); }
+
+  .rechazada-banner { background: #fef2f2; border: 1.5px solid #fecaca; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: #b91c1c; font-weight: 500; }
+
+  /* MODALES */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal { background: white; border-radius: 16px; padding: 32px; width: 100%; max-width: 540px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); transform: translateY(10px); transition: transform .2s; }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-title { font-size: 20px; font-weight: 700; color: var(--azul-oscuro); margin-bottom: 6px; }
+  .modal-sub { font-size: 13px; color: var(--gray-500); margin-bottom: 24px; }
+  .modal-form { display: flex; flex-direction: column; gap: 14px; }
+  .modal-form label { font-size: 11px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; margin-bottom: -8px; }
+  .modal-form input, .modal-form select, .modal-form textarea { padding: 11px 14px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-family: 'Poppins', sans-serif; font-size: 13px; color: var(--gray-700); outline: none; transition: border-color .15s; }
+  .modal-form input:focus, .modal-form select:focus, .modal-form textarea:focus { border-color: var(--azul); }
+  .modal-form textarea { resize: vertical; min-height: 80px; }
+  .person-hint { font-size: 11px; padding: 7px 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; color: #15803d; display: none; }
+  .person-hint.warn { background: #fff7ed; border-color: #fed7aa; color: #c2410c; }
+  .file-drop { border: 2px dashed var(--gray-200); border-radius: 10px; padding: 24px; text-align: center; cursor: pointer; transition: all .15s; background: var(--gray-50); }
+  .file-drop:hover, .file-drop.drag-over { border-color: var(--azul); background: #e8f4fd; }
+  .file-drop-icon { font-size: 28px; margin-bottom: 6px; }
+  .file-drop-text { font-size: 13px; color: var(--gray-500); }
+  .file-drop-text span { color: var(--azul); font-weight: 600; }
+  .file-selected { font-size: 12px; color: var(--success); font-weight: 500; margin-top: 6px; }
+  #fileInput { display: none; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+  .btn-cancel { padding: 10px 20px; border-radius: 8px; border: 1.5px solid var(--gray-200); background: white; font-family: 'Poppins', sans-serif; font-size: 13px; font-weight: 500; color: var(--gray-500); cursor: pointer; }
+  .btn-submit { padding: 10px 24px; border-radius: 8px; border: none; background: var(--azul); color: white; font-family: 'Poppins', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+  .btn-submit:hover { background: #003e6e; }
+  .hint-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #92400e; }
+
+  /* CONFIG PANEL */
+  .config-panel { position: fixed; right: 0; top: 60px; bottom: 0; width: 440px; background: white; box-shadow: -8px 0 32px rgba(0,0,0,.12); z-index: 200; transform: translateX(100%); transition: transform .25s ease; display: flex; flex-direction: column; overflow: hidden; }
+  .config-panel.open { transform: translateX(0); }
+  .config-header { background: var(--azul-oscuro); padding: 20px 24px; color: white; display: flex; justify-content: space-between; align-items: center; }
+  .config-header h2 { font-size: 16px; font-weight: 600; }
+  .config-close { background: none; border: none; color: white; font-size: 20px; cursor: pointer; opacity: .7; }
+  .config-close:hover { opacity: 1; }
+  .config-body { flex: 1; overflow-y: auto; padding: 24px; }
+  .config-section { margin-bottom: 28px; }
+  .config-section-title { font-size: 11px; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--gray-200); }
+  .config-field { margin-bottom: 10px; }
+  .config-field label { display: block; font-size: 11px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
+  .config-field input { width: 100%; padding: 9px 12px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-family: 'Poppins', sans-serif; font-size: 12px; color: var(--gray-700); outline: none; transition: border-color .15s; }
+  .config-field input:focus { border-color: var(--azul); }
+  .config-field .field-hint { font-size: 11px; color: var(--gray-400); margin-top: 3px; }
+  .person-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .person-row input { width: 100%; padding: 8px 10px; border: 1.5px solid var(--gray-200); border-radius: 7px; font-family: 'Poppins', sans-serif; font-size: 12px; color: var(--gray-700); outline: none; }
+  .person-row input:focus { border-color: var(--azul); }
+  .btn-add-person { width: 100%; padding: 8px; border-radius: 7px; border: 1.5px dashed var(--gray-200); background: transparent; font-family: 'Poppins', sans-serif; font-size: 12px; color: var(--gray-500); cursor: pointer; transition: all .15s; margin-bottom: 4px; }
+  .btn-add-person:hover { border-color: var(--azul); color: var(--azul); background: #e8f4fd; }
+  .btn-remove-person { background: none; border: none; color: var(--gray-400); cursor: pointer; font-size: 16px; padding: 0 4px; align-self: center; }
+  .btn-remove-person:hover { color: var(--danger); }
+  .person-row-wrap { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .notif-status-box { border-radius: 10px; padding: 12px 14px; font-size: 12px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+  .notif-status-box.ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; }
+  .notif-status-box.warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+  .notif-status-box.err { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
+  .btn-test-notif { width: 100%; padding: 10px; border-radius: 8px; border: 1.5px solid var(--azul); background: transparent; color: var(--azul); font-family: 'Poppins', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; margin-top: 6px; }
+  .btn-test-notif:hover { background: #e8f4fd; }
+  .btn-save-config { width: 100%; padding: 12px; border-radius: 8px; border: none; background: var(--azul); color: white; font-family: 'Poppins', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; margin-top: 8px; }
+  .btn-save-config:hover { background: #003e6e; }
+
+  /* NOTIF DROPDOWN */
+  .notif-dropdown { position: fixed; right: 24px; top: 68px; width: 360px; background: white; border-radius: 12px; box-shadow: var(--shadow-lg); z-index: 300; border: 1px solid var(--gray-200); display: none; }
+  .notif-dropdown.open { display: block; }
+  .nd-header { padding: 14px 18px; border-bottom: 1px solid var(--gray-200); display: flex; justify-content: space-between; align-items: center; }
+  .nd-title { font-size: 13px; font-weight: 700; color: var(--gray-900); }
+  .nd-clear { font-size: 11px; color: var(--azul); cursor: pointer; font-weight: 500; }
+  .nd-list { max-height: 320px; overflow-y: auto; }
+  .nd-item { padding: 12px 18px; border-bottom: 1px solid var(--gray-100); cursor: pointer; transition: background .1s; display: flex; gap: 10px; align-items: flex-start; }
+  .nd-item:hover { background: var(--gray-50); }
+  .nd-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rosa); margin-top: 5px; flex-shrink: 0; }
+  .nd-dot.email { background: var(--azul); }
+  .nd-text { font-size: 12px; color: var(--gray-700); line-height: 1.4; }
+  .nd-time { font-size: 10px; color: var(--gray-400); margin-top: 2px; }
+  .nd-empty { padding: 28px; text-align: center; color: var(--gray-400); font-size: 13px; }
+
+  /* TOAST */
+  .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+  .toast { background: var(--azul-oscuro); color: white; padding: 12px 18px; border-radius: 10px; font-size: 13px; font-weight: 500; box-shadow: var(--shadow-lg); display: flex; align-items: center; gap: 10px; animation: slideIn .3s ease; max-width: 320px; }
+  .toast.success { background: #065f46; }
+  .toast.error { background: #991b1b; }
+  .toast.warning { background: #92400e; }
+  @keyframes slideIn { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-brand">
+    <div class="header-logo">ua</div>
+    <div>
+      <div class="header-title">Seguimiento de Facturas</div>
+      <div class="header-sub">Universal Assistance · Administración</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <div class="notif-bell" id="notifBell" onclick="toggleNotifDropdown()">🔔
+      <div class="notif-badge" id="notifBadge" style="display:none">0</div>
+    </div>
+    <button class="btn-config" onclick="openConfig()">⚙ Configuración</button>
+    <button class="btn-nueva" onclick="openModal()">+ Nueva factura</button>
+  </div>
+</header>
+
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-search">
+      <input type="text" id="searchInput" placeholder="Buscar proveedor, Nº factura..." oninput="renderList()">
+    </div>
+    <div class="sidebar-filters">
+      <button class="filter-chip active" data-filter="all" onclick="setFilter('all')">Todas</button>
+      <button class="filter-chip" data-filter="en_curso" onclick="setFilter('en_curso')">En curso</button>
+      <button class="filter-chip" data-filter="por_vencer" onclick="setFilter('por_vencer')">⚠ Por vencer</button>
+      <button class="filter-chip" data-filter="flow_overdue" onclick="setFilter('flow_overdue')">🔴 Sin avance</button>
+      <button class="filter-chip" data-filter="completada" onclick="setFilter('completada')">Completadas</button>
+      <button class="filter-chip" data-filter="rechazada" onclick="setFilter('rechazada')">Rechazadas</button>
+    </div>
+    <div class="facturas-list" id="facturasList"></div>
+  </div>
+  <div class="detail-panel" id="detailPanel">
+    <div class="empty-state">
+      <div class="empty-state-icon">🧾</div>
+      <p>Seleccioná una factura para ver su estado</p>
+    </div>
+  </div>
+</div>
+
+<!-- NOTIF DROPDOWN -->
+<div class="notif-dropdown" id="notifDropdown">
+  <div class="nd-header">
+    <div class="nd-title">Notificaciones</div>
+    <div class="nd-clear" onclick="clearNotifs()">Limpiar todo</div>
+  </div>
+  <div class="nd-list" id="ndList"></div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- MODAL NUEVA FACTURA -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-title">Nueva factura</div>
+    <div class="modal-sub">Completá los datos para iniciar el proceso de aprobación</div>
+    <div class="modal-form">
+      <label>Proveedor</label>
+      <input type="text" id="mProveedor" placeholder="Nombre del proveedor">
+      <label>Número de factura</label>
+      <input type="text" id="mNumFact" placeholder="Ej: 0001-00004821">
+      <label>Monto (USD)</label>
+      <input type="number" id="mMonto" placeholder="0.00" min="0" step="0.01" oninput="updateAprobadorHint()">
+      <div class="hint-box" id="aprobadorHint" style="display:none"></div>
+      <label>Descripción / Concepto</label>
+      <textarea id="mConcepto" placeholder="Descripción del servicio o producto..."></textarea>
+      <label>Fecha de factura</label>
+      <input type="date" id="mFecha">
+      <label>PDF de la factura</label>
+      <div class="file-drop" id="fileDrop" onclick="document.getElementById('fileInput').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave()" ondrop="handleDrop(event)">
+        <div class="file-drop-icon">📄</div>
+        <div class="file-drop-text">Arrastrá el archivo o <span>hacé clic para seleccionar</span></div>
+        <input type="file" id="fileInput" accept=".pdf" onchange="handleFile(this.files[0])">
+        <div class="file-selected" id="fileSelected" style="display:none"></div>
+      </div>
+      <label>Cargado por</label>
+      <input type="text" id="mCargadoPor" placeholder="Tu nombre" oninput="onCargadoPorInput()">
+      <div class="person-hint" id="cargadorHint"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-submit" onclick="crearFactura()">Iniciar proceso →</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIG PANEL -->
+<div class="config-panel" id="configPanel">
+  <div class="config-header">
+    <h2>⚙ Configuración</h2>
+    <button class="config-close" onclick="closeConfig()">✕</button>
+  </div>
+  <div class="config-body">
+
+    <div class="config-section">
+      <div class="config-section-title">👥 Personas que cargan facturas</div>
+      <p style="font-size:11px;color:var(--gray-400);margin-bottom:12px;">Registrá nombre y email de cada persona. Las notificaciones de su factura le llegarán a ella.</p>
+      <div id="personasContainer"></div>
+      <button class="btn-add-person" onclick="addPersonaRow()">+ Agregar persona</button>
+    </div>
+
+    <div class="config-section">
+      <div class="config-section-title">🔔 Notificaciones push</div>
+      <div id="pushStatus" class="notif-status-box warn">⏳ Verificando...</div>
+      <button class="btn-test-notif" onclick="requestPushPermission()">Activar notificaciones push</button>
+      <button class="btn-test-notif" style="margin-top:8px" onclick="testPushNotif()">Probar notificación push</button>
+    </div>
+
+    <div class="config-section">
+      <div class="config-section-title">📧 EmailJS</div>
+      <div class="config-field">
+        <label>Service ID</label>
+        <input type="text" id="cfg_serviceId" placeholder="service_xxxxxxx">
+      </div>
+      <div class="config-field">
+        <label>Template ID</label>
+        <input type="text" id="cfg_templateId" placeholder="template_xxxxxxx">
+        <div class="field-hint">Variables: to_email, to_name, subject, message, factura_num, proveedor, monto</div>
+      </div>
+      <div class="config-field">
+        <label>Public Key</label>
+        <input type="text" id="cfg_publicKey" placeholder="xxxxxxxxxxxxxxxxxxxxxx">
+      </div>
+      <button class="btn-test-notif" onclick="testEmail()">Enviar email de prueba</button>
+    </div>
+
+    <div class="config-section">
+      <div class="config-section-title">📬 Emails por área</div>
+      <div class="config-field"><label>Urquieta (aprobador &lt; USD 2.000)</label><input type="text" id="cfg_email_urquieta" placeholder="urquieta@universal-assistance.com"></div>
+      <div class="config-field"><label>Diego Barón</label><input type="text" id="cfg_email_baron" placeholder="dbaron@universal-assistance.com"></div>
+      <div class="config-field"><label>Leonardo Napal</label><input type="text" id="cfg_email_napal" placeholder="lnapal@universal-assistance.com"></div>
+      <div class="config-field"><label>Compras</label><input type="text" id="cfg_email_compras" placeholder="compras@universal-assistance.com"></div>
+      <div class="config-field"><label>Proveedores</label><input type="text" id="cfg_email_proveedores" placeholder="proveedores@universal-assistance.com"></div>
+      <div class="config-field"><label>Impuestos</label><input type="text" id="cfg_email_impuestos" placeholder="impuestos@universal-assistance.com"></div>
+      <div class="config-field"><label>Tesorería</label><input type="text" id="cfg_email_tesoreria" placeholder="tesoreria@universal-assistance.com"></div>
+    </div>
+
+    <button class="btn-save-config" onclick="saveConfig()">💾 Guardar configuración</button>
+  </div>
+</div>
+
+<script>
+// ==================== CONFIG ====================
+const CONFIG_KEY = 'ua_facturas_config';
+let config = {
+  serviceId: '', templateId: '', publicKey: '',
+  personas: [], // [{nombre, email}]
+  emails: { urquieta:'', baron:'', napal:'', compras:'', proveedores:'', impuestos:'', tesoreria:'' }
+};
+
+function loadConfig() {
+  const saved = localStorage.getItem(CONFIG_KEY);
+  if (saved) config = { ...config, ...JSON.parse(saved) };
+  if (!config.personas) config.personas = [];
+  document.getElementById('cfg_serviceId').value = config.serviceId || '';
+  document.getElementById('cfg_templateId').value = config.templateId || '';
+  document.getElementById('cfg_publicKey').value = config.publicKey || '';
+  document.getElementById('cfg_email_urquieta').value = config.emails?.urquieta || '';
+  document.getElementById('cfg_email_baron').value = config.emails?.baron || '';
+  document.getElementById('cfg_email_napal').value = config.emails?.napal || '';
+  document.getElementById('cfg_email_compras').value = config.emails?.compras || '';
+  document.getElementById('cfg_email_proveedores').value = config.emails?.proveedores || '';
+  document.getElementById('cfg_email_impuestos').value = config.emails?.impuestos || '';
+  document.getElementById('cfg_email_tesoreria').value = config.emails?.tesoreria || '';
+  renderPersonasRows();
+  if (config.publicKey) emailjs.init(config.publicKey);
+  updatePushStatus();
+}
+
+function saveConfig() {
+  // Leer personas
+  const rows = document.querySelectorAll('.persona-row-item');
+  const personas = [];
+  rows.forEach(row => {
+    const n = row.querySelector('.p-nombre').value.trim();
+    const e = row.querySelector('.p-email').value.trim();
+    if (n) personas.push({ nombre: n, email: e });
+  });
+  config = {
+    serviceId: document.getElementById('cfg_serviceId').value.trim(),
+    templateId: document.getElementById('cfg_templateId').value.trim(),
+    publicKey: document.getElementById('cfg_publicKey').value.trim(),
+    personas,
+    emails: {
+      urquieta: document.getElementById('cfg_email_urquieta').value.trim(),
+      baron: document.getElementById('cfg_email_baron').value.trim(),
+      napal: document.getElementById('cfg_email_napal').value.trim(),
+      compras: document.getElementById('cfg_email_compras').value.trim(),
+      proveedores: document.getElementById('cfg_email_proveedores').value.trim(),
+      impuestos: document.getElementById('cfg_email_impuestos').value.trim(),
+      tesoreria: document.getElementById('cfg_email_tesoreria').value.trim(),
+    }
+  };
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  if (config.publicKey) emailjs.init(config.publicKey);
+  showToast('✓ Configuración guardada', 'success');
+}
+
+function renderPersonasRows() {
+  const c = document.getElementById('personasContainer');
+  c.innerHTML = '';
+  (config.personas || []).forEach((p, i) => addPersonaRow(p.nombre, p.email));
+  if (!config.personas?.length) addPersonaRow();
+}
+
+function addPersonaRow(nombre = '', email = '') {
+  const c = document.getElementById('personasContainer');
+  const div = document.createElement('div');
+  div.className = 'persona-row-item';
+  div.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:6px;';
+  div.innerHTML = `
+    <input class="p-nombre" type="text" placeholder="Nombre" value="${nombre}" style="flex:1;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:7px;font-family:'Poppins',sans-serif;font-size:12px;outline:none;">
+    <input class="p-email" type="email" placeholder="email@universal-assistance.com" value="${email}" style="flex:2;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:7px;font-family:'Poppins',sans-serif;font-size:12px;outline:none;">
+    <button class="btn-remove-person" onclick="this.parentElement.remove()">✕</button>`;
+  c.appendChild(div);
+}
+
+function getPersonaEmail(nombre) {
+  if (!nombre) return null;
+  const norm = s => s.toLowerCase().trim();
+  const found = (config.personas || []).find(p => norm(p.nombre) === norm(nombre));
+  return found?.email || null;
+}
+
+function onCargadoPorInput() {
+  const nombre = document.getElementById('mCargadoPor').value.trim();
+  const hint = document.getElementById('cargadorHint');
+  if (!nombre) { hint.style.display = 'none'; return; }
+  const email = getPersonaEmail(nombre);
+  hint.style.display = 'block';
+  if (email) {
+    hint.className = 'person-hint';
+    hint.textContent = `✓ Email registrado: ${email}`;
+  } else {
+    hint.className = 'person-hint warn';
+    hint.textContent = `⚠ "${nombre}" no tiene email registrado. Las notificaciones no le llegarán. Podés agregarlo en Configuración.`;
+  }
+}
+
+function openConfig() { document.getElementById('configPanel').classList.add('open'); loadConfig(); }
+function closeConfig() { document.getElementById('configPanel').classList.remove('open'); }
+
+// ==================== DB ====================
+const FIREBASE_URL = 'https://facturas-ua-default-rtdb.firebaseio.com';
+async function dbGet() {
+  try {
+    const r = await fetch(FIREBASE_URL + '/facturas.json');
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    return data ? Object.entries(data).map(([id, v]) => ({...v, id})) : [];
+  } catch {
+    const local = localStorage.getItem('ua_facturas');
+    return local ? JSON.parse(local) : [];
+  }
+}
+async function dbSave(f) {
+  try {
+    const r = await fetch(FIREBASE_URL + '/facturas/' + f.id + '.json', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(f) });
+    if (!r.ok) throw new Error();
+  } catch {
+    const all = await dbGet();
+    const idx = all.findIndex(x => x.id === f.id);
+    if (idx >= 0) all[idx] = f; else all.push(f);
+    localStorage.setItem('ua_facturas', JSON.stringify(all));
+  }
+}
+
+// ==================== STEPS ====================
+const STEPS = [
+  { id: 'aprobacion_inicial', label: 'Aprobación inicial', area: 'Aprobadores', emailKey: null },
+  { id: 'orden_compra',       label: 'Orden de compra',   area: 'Compras',      emailKey: 'compras' },
+  { id: 'aprobacion_oc',      label: 'Aprobación OC',     area: 'Aprobadores',  emailKey: null },
+  { id: 'asociacion',         label: 'Asociar factura',   area: 'Proveedores',  emailKey: 'proveedores' },
+  { id: 'impuestos',          label: 'Impuestos / IVA',   area: 'Impuestos',    emailKey: 'impuestos' },
+  { id: 'tesoreria',          label: 'Tesorería / Pago',  area: 'Tesorería',    emailKey: 'tesoreria' },
+];
+
+let facturas = [], selectedId = null, activeFilter = 'all', pdfFile = null, pdfDataUrl = null, notifLog = [];
+
+async function init() {
+  facturas = await dbGet();
+  loadConfig();
+  loadNotifLog();
+  renderList();
+  renderNotifBadge();
+  checkOverdueFacturas();
+  checkPaymentAlerts();
+  setInterval(checkOverdueFacturas, 60 * 60 * 1000);
+  setInterval(checkPaymentAlerts, 60 * 60 * 1000);
+}
+
+// ==================== PAYMENT COUNTDOWN ====================
+const PAY_DAYS = 30;
+
+function getPayDaysElapsed(f) {
+  return Math.floor((Date.now() - f.createdAt) / (1000 * 60 * 60 * 24));
+}
+function getPayDaysLeft(f) {
+  return PAY_DAYS - getPayDaysElapsed(f);
+}
+function getPayStatus(f) {
+  // Solo facturas no rechazadas y no completadas (o completadas sin pagar)
+  const isPaid = !!f.steps?.tesoreria?.status;
+  if (isPaid) return 'paid';
+  const elapsed = getPayDaysElapsed(f);
+  if (elapsed < 15) return 'ok';
+  if (elapsed < 23) return 'warn';
+  if (elapsed < 30) return 'urgent';
+  return 'overdue';
+}
+function getPayColor(status) {
+  return { ok: '#10b981', warn: '#f59e0b', urgent: '#f97316', overdue: '#dc2626', paid: '#10b981' }[status] || '#10b981';
+}
+
+async function checkPaymentAlerts() {
+  for (const f of facturas) {
+    if (f.rechazada || f.steps?.tesoreria?.status) continue;
+    const status = getPayStatus(f);
+    const elapsed = getPayDaysElapsed(f);
+
+    // Alerta a los 15 días
+    const key15 = `pay_alert_15_${f.id}`;
+    if (elapsed >= 15 && !localStorage.getItem(key15)) {
+      localStorage.setItem(key15, '1');
+      const msg = `⚠ Factura ${f.numFactura} (${f.proveedor}) lleva 15 días sin pago. Vence en ${PAY_DAYS - elapsed} días.`;
+      addNotifLog(msg, 'warn', f.id);
+      sendPushNotif('Factura próxima a vencer · UA', msg);
+      await notifyPersona(f, msg);
+    }
+    // Alerta a los 23 días
+    const key23 = `pay_alert_23_${f.id}`;
+    if (elapsed >= 23 && !localStorage.getItem(key23)) {
+      localStorage.setItem(key23, '1');
+      const msg = `🔴 URGENTE: Factura ${f.numFactura} (${f.proveedor}) vence en ${PAY_DAYS - elapsed} días.`;
+      addNotifLog(msg, 'urgent', f.id);
+      sendPushNotif('⚠ Factura URGENTE · UA', msg);
+      await notifyPersona(f, msg);
+    }
+    // Alerta al vencer
+    const key30 = `pay_alert_30_${f.id}`;
+    if (elapsed >= 30 && !localStorage.getItem(key30)) {
+      localStorage.setItem(key30, '1');
+      const msg = `❌ Factura ${f.numFactura} (${f.proveedor}) VENCIDA. ${elapsed - PAY_DAYS} días de atraso.`;
+      addNotifLog(msg, 'error', f.id);
+      sendPushNotif('❌ Factura vencida · UA', msg);
+      await notifyPersona(f, msg);
+    }
+  }
+}
+
+// ==================== HELPERS ====================
+function getAprobador(monto) { return monto < 2000 ? ['Urquieta'] : ['Diego Barón', 'Leonardo Napal']; }
+function getAprobadorEmails(monto) {
+  if (monto < 2000) return [config.emails?.urquieta].filter(Boolean);
+  return [config.emails?.baron, config.emails?.napal].filter(Boolean);
+}
+function getStepIndex(f) {
+  for (let i = 0; i < STEPS.length; i++) { if (!f.steps[STEPS[i].id] || f.steps[STEPS[i].id].status !== 'done') return i; }
+  return STEPS.length;
+}
+function getStatusLabel(f) {
+  if (f.rechazada) return 'Rechazada';
+  const idx = getStepIndex(f);
+  if (idx >= STEPS.length) return 'Completada';
+  return STEPS[idx].label;
+}
+function isFlowOverdue(f) {
+  if (f.rechazada) return false;
+  const idx = getStepIndex(f);
+  if (idx >= STEPS.length) return false;
+  const lastTs = idx === 0 ? f.createdAt : (f.steps[STEPS[idx-1].id]?.doneAt || f.createdAt);
+  return (Date.now() - lastTs) / (1000 * 60 * 60 * 24) >= 7;
+}
+function getFlowDays(f) {
+  const idx = getStepIndex(f);
+  const lastTs = idx === 0 ? f.createdAt : (f.steps[STEPS[idx-1].id]?.doneAt || f.createdAt);
+  return Math.floor((Date.now() - lastTs) / (1000 * 60 * 60 * 24));
+}
+function formatMonto(n) { return 'USD ' + Number(n).toLocaleString('es-AR', {minimumFractionDigits:2,maximumFractionDigits:2}); }
+function formatDate(iso) { if (!iso) return '—'; return new Date(iso).toLocaleDateString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric'}); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+// ==================== FLOW OVERDUE CHECK ====================
+async function checkOverdueFacturas() {
+  for (const f of facturas) {
+    if (f.rechazada || getStepIndex(f) >= STEPS.length) continue;
+    const dias = getFlowDays(f);
+    const idx = getStepIndex(f);
+    const key = `flow_overdue_${f.id}_step${idx}`;
+    if (dias >= 7 && !localStorage.getItem(key)) {
+      localStorage.setItem(key, '1');
+      const stepLabel = STEPS[idx]?.label || '—';
+      const msg = `⚠ Factura ${f.numFactura} lleva ${dias} días sin avanzar en "${stepLabel}"`;
+      addNotifLog(msg, 'overdue', f.id);
+      sendPushNotif('Factura sin movimiento · UA', msg);
+      const emailKey = STEPS[idx]?.emailKey;
+      let emails = emailKey ? [config.emails?.[emailKey]].filter(Boolean) : getAprobadorEmails(f.monto);
+      const personaEmail = getPersonaEmail(f.cargadoPor);
+      if (personaEmail && !emails.includes(personaEmail)) emails.push(personaEmail);
+      if (emails.length) await sendEmail(emails, `Recordatorio: Factura ${f.numFactura} requiere acción`, msg, f);
+    }
+  }
+}
+
+// ==================== NOTIFICATIONS ====================
+function updatePushStatus() {
+  const box = document.getElementById('pushStatus');
+  if (!box) return;
+  if (!('Notification' in window)) { box.className='notif-status-box err'; box.textContent='✗ Navegador no soporta push'; return; }
+  if (Notification.permission === 'granted') { box.className='notif-status-box ok'; box.textContent='✓ Notificaciones push activadas'; }
+  else if (Notification.permission === 'denied') { box.className='notif-status-box err'; box.textContent='✗ Permiso denegado en el navegador'; }
+  else { box.className='notif-status-box warn'; box.textContent='⏳ Permiso pendiente'; }
+}
+async function requestPushPermission() {
+  if (!('Notification' in window)) { showToast('Tu navegador no soporta notificaciones', 'error'); return; }
+  const p = await Notification.requestPermission();
+  updatePushStatus();
+  if (p === 'granted') showToast('✓ Notificaciones push activadas', 'success');
+  else showToast('Permiso denegado', 'error');
+}
+function sendPushNotif(title, body) {
+  if (Notification.permission !== 'granted') return;
+  try { new Notification(title, { body, tag: uid() }); } catch(e) {}
+}
+async function testPushNotif() {
+  if (Notification.permission !== 'granted') { await requestPushPermission(); return; }
+  sendPushNotif('Seguimiento de Facturas · UA', 'Notificaciones push funcionando correctamente ✓');
+  showToast('Push de prueba enviada', 'success');
+}
+
+async function sendEmail(toEmails, subject, message, factura) {
+  if (!config.serviceId || !config.templateId || !config.publicKey) {
+    addNotifLog(`📧 Email pendiente (sin EmailJS): ${subject}`, 'email'); return;
+  }
+  for (const email of toEmails) {
+    if (!email) continue;
+    try {
+      await emailjs.send(config.serviceId, config.templateId, {
+        to_email: email, to_name: email.split('@')[0], subject, message,
+        factura_num: factura?.numFactura || '—', proveedor: factura?.proveedor || '—', monto: factura ? formatMonto(factura.monto) : '—',
+      });
+      addNotifLog(`📧 Email → ${email}: ${subject}`, 'email', factura?.id);
+    } catch(e) { console.warn('EmailJS:', e); addNotifLog(`⚠ Error email → ${email}`, 'error', factura?.id); }
+  }
+}
+
+// Notificar a la persona que cargó la factura (siempre en copia)
+async function notifyPersona(f, msg) {
+  const email = getPersonaEmail(f.cargadoPor);
+  if (email) await sendEmail([email], `Tu factura ${f.numFactura} · Actualización`, msg, f);
+}
+
+async function testEmail() {
+  const email = config.emails?.urquieta || document.getElementById('cfg_email_urquieta').value.trim();
+  if (!email) { showToast('Ingresá un email primero', 'warning'); return; }
+  if (!config.serviceId) { showToast('Configurá EmailJS primero', 'warning'); return; }
+  await sendEmail([email], 'Prueba · UA Facturas', 'Email de prueba del sistema de seguimiento de facturas.', null);
+  showToast('Email de prueba enviado', 'success');
+}
+
+// NOTIF LOG
+function loadNotifLog() {
+  const s = localStorage.getItem('ua_notif_log');
+  notifLog = s ? JSON.parse(s) : [];
+  renderNotifDropdown(); renderNotifBadge();
+}
+function addNotifLog(text, type='info', facturaId=null) {
+  notifLog.unshift({ id: uid(), text, type, facturaId, ts: Date.now(), read: false });
+  if (notifLog.length > 50) notifLog.pop();
+  localStorage.setItem('ua_notif_log', JSON.stringify(notifLog));
+  renderNotifDropdown(); renderNotifBadge();
+}
+function clearNotifs() {
+  notifLog = []; localStorage.setItem('ua_notif_log', JSON.stringify(notifLog));
+  renderNotifDropdown(); renderNotifBadge();
+}
+function renderNotifBadge() {
+  const u = notifLog.filter(n => !n.read).length;
+  const b = document.getElementById('notifBadge');
+  if (u > 0) { b.style.display='flex'; b.textContent = u > 9 ? '9+' : u; } else b.style.display='none';
+}
+function renderNotifDropdown() {
+  const list = document.getElementById('ndList');
+  if (!notifLog.length) { list.innerHTML='<div class="nd-empty">Sin notificaciones</div>'; return; }
+  list.innerHTML = notifLog.map(n => {
+    const dotCls = n.type==='email' ? 'nd-dot email' : 'nd-dot';
+    const time = new Date(n.ts).toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    return `<div class="nd-item" onclick="notifClick('${n.id}','${n.facturaId||''}')">
+      <div class="${dotCls}"></div>
+      <div><div class="nd-text">${n.text}</div><div class="nd-time">${time}</div></div>
+    </div>`;
+  }).join('');
+}
+function notifClick(nId, fId) {
+  const n = notifLog.find(x=>x.id===nId);
+  if (n) { n.read=true; localStorage.setItem('ua_notif_log', JSON.stringify(notifLog)); }
+  renderNotifBadge();
+  if (fId && facturas.find(f=>f.id===fId)) { selectedId=fId; renderList(); renderDetail(); toggleNotifDropdown(false); }
+}
+function toggleNotifDropdown(force) {
+  const dd = document.getElementById('notifDropdown');
+  const open = force!==undefined ? force : !dd.classList.contains('open');
+  dd.classList.toggle('open', open);
+  if (open) { notifLog.forEach(n=>n.read=true); localStorage.setItem('ua_notif_log', JSON.stringify(notifLog)); renderNotifBadge(); renderNotifDropdown(); }
+}
+document.addEventListener('click', e => { if (!e.target.closest('#notifDropdown') && !e.target.closest('#notifBell')) toggleNotifDropdown(false); });
+
+function showToast(msg, type='') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast ' + type; t.textContent = msg; c.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+// ==================== RENDER LIST ====================
+function setFilter(f) {
+  activeFilter = f;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.toggle('active', c.dataset.filter===f));
+  renderList();
+}
+function renderList() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  let list = [...facturas].sort((a,b) => b.createdAt - a.createdAt);
+  if (q) list = list.filter(f => (f.proveedor||'').toLowerCase().includes(q) || (f.numFactura||'').toLowerCase().includes(q));
+  if (activeFilter==='en_curso')    list = list.filter(f => !f.rechazada && getStepIndex(f)<STEPS.length && !isFlowOverdue(f));
+  if (activeFilter==='por_vencer')  list = list.filter(f => !f.rechazada && !f.steps?.tesoreria?.status && ['warn','urgent','overdue'].includes(getPayStatus(f)));
+  if (activeFilter==='flow_overdue')list = list.filter(f => isFlowOverdue(f));
+  if (activeFilter==='completada')  list = list.filter(f => !f.rechazada && getStepIndex(f)>=STEPS.length);
+  if (activeFilter==='rechazada')   list = list.filter(f => f.rechazada);
+
+  const el = document.getElementById('facturasList');
+  if (!list.length) { el.innerHTML='<div style="padding:24px;text-align:center;color:#94a3b8;font-size:13px;">Sin resultados</div>'; return; }
+
+  el.innerHTML = list.map(f => {
+    const idx = getStepIndex(f);
+    const flowOD = isFlowOverdue(f);
+    const payStatus = getPayStatus(f);
+    const payElapsed = getPayDaysElapsed(f);
+    const payLeft = getPayDaysLeft(f);
+    const payPct = Math.min(100, Math.round(payElapsed / PAY_DAYS * 100));
+    const paid = payStatus === 'paid';
+
+    let borderCls = '';
+    if (f.rechazada) borderCls = '';
+    else if (flowOD) borderCls = 'flow-overdue';
+    else if (!paid) borderCls = 'pay-' + payStatus;
+
+    const dots = STEPS.map((_,i) => {
+      let cls = 'step-dot';
+      if (f.rechazada && i>=(f.rechazadaEnStep||0)) cls+=' pending';
+      else if (i<idx) cls+=' done';
+      else if (i===idx) cls += flowOD ? ' pending' : ' active';
+      return `<div class="${cls}"></div>`;
+    }).join('');
+
+    const payLabel = paid ? '' : payLeft > 0
+      ? `<div style="font-size:10px;color:${getPayColor(payStatus)};font-weight:600;margin-top:4px;">${payLeft > 14 ? '🟢' : payLeft > 7 ? '🟡' : payLeft > 0 ? '🔴' : '⚫'} ${payLeft} días para el vencimiento</div>`
+      : `<div style="font-size:10px;color:var(--pay-overdue);font-weight:600;margin-top:4px;">⚫ Vencida hace ${Math.abs(payLeft)} días</div>`;
+
+    return `<div class="factura-card ${f.id===selectedId?'active':''} ${borderCls}" onclick="selectFactura('${f.id}')">
+      <div class="fc-top"><div class="fc-proveedor">${f.proveedor||'—'}</div><div class="fc-monto">${formatMonto(f.monto)}</div></div>
+      <div class="fc-mid"><div class="fc-num">Nº ${f.numFactura||'—'}</div><div class="fc-fecha">${formatDate(f.fechaFactura)}</div></div>
+      <div class="fc-step-bar">${dots}</div>
+      <div class="fc-status-label">${f.rechazada?'🔴 ':idx>=STEPS.length?'✅ ':flowOD?'⏱ ':'🔵 '}${getStatusLabel(f)}</div>
+      ${!f.rechazada && !paid ? `<div class="fc-pay-bar">
+        <div class="pay-track"><div class="pay-fill ${payStatus}" style="width:${payPct}%"></div></div>
+        ${payLabel}
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ==================== SELECT & DETAIL ====================
+function selectFactura(id) { selectedId=id; renderList(); renderDetail(); }
+
+function buildPayCountdown(f) {
+  const paid = !!f.steps?.tesoreria?.status;
+  if (paid || f.rechazada) return '';
+  const elapsed = getPayDaysElapsed(f);
+  const left = getPayDaysLeft(f);
+  const pct = Math.min(100, Math.round(elapsed / PAY_DAYS * 100));
+  const status = getPayStatus(f);
+  const color = getPayColor(status);
+  // SVG dial
+  const r = 22, circ = 2*Math.PI*r;
+  const dash = circ * pct / 100;
+  const dialSvg = `<svg viewBox="0 0 56 56"><circle cx="28" cy="28" r="${r}" fill="none" stroke="#e2e8f0" stroke-width="4"/>
+    <circle cx="28" cy="28" r="${r}" fill="none" stroke="${color}" stroke-width="4" stroke-dasharray="${dash} ${circ}" stroke-dashoffset="${circ*0.25}" stroke-linecap="round"/>
+    <text x="28" y="32" text-anchor="middle" font-size="11" font-weight="700" fill="${color}" font-family="Poppins,sans-serif">${Math.abs(left)}</text></svg>`;
+  const title = status==='ok' ? 'Plazo de pago' : status==='warn' ? '⚠ Próximo a vencer' : status==='urgent' ? '🔴 Urgente' : '⚫ Vencida';
+  const sub = left > 0 ? `Quedan ${left} días de ${PAY_DAYS} para el pago` : left === 0 ? 'Vence hoy' : `Vencida hace ${Math.abs(left)} días`;
+  return `<div class="pay-countdown ${status}">
+    <div class="pay-dial">${dialSvg}</div>
+    <div style="flex:1">
+      <div class="pay-countdown-title">${title}</div>
+      <div class="pay-countdown-days">${left > 0 ? left : Math.abs(left)} <span style="font-size:14px;font-weight:500;">días</span></div>
+      <div class="pay-countdown-sub">${sub}</div>
+      <div class="pay-big-track" style="margin-top:8px"><div class="pay-big-fill pay-${status}" style="width:${pct}%"></div></div>
+    </div>
+  </div>`;
+}
+
+function renderDetail() {
+  const f = facturas.find(x=>x.id===selectedId);
+  const panel = document.getElementById('detailPanel');
+  if (!f) { panel.innerHTML='<div class="empty-state"><div class="empty-state-icon">🧾</div><p>Seleccioná una factura</p></div>'; return; }
+
+  const idx = getStepIndex(f);
+  const aprobadores = getAprobador(f.monto);
+  const flowOD = isFlowOverdue(f);
+
+  const stepsHtml = STEPS.map((s,i) => {
+    const done = i<idx && !f.rechazada;
+    const cur = i===idx && !f.rechazada;
+    const od = cur && flowOD;
+    let cls = 'step-item';
+    if (done) cls+=' done'; else if (od) cls+=' overdue current'; else if (cur) cls+=' current';
+    return `<div class="${cls}"><div class="step-circle">${done?'✓':i+1}</div><div class="step-label">${s.label}</div></div>`;
+  }).join('');
+
+  let actionCards = '';
+  if (f.rechazada) actionCards = `<div class="rechazada-banner">❌ Rechazada en "<strong>${STEPS[f.rechazadaEnStep]?.label||'—'}</strong>" por ${f.rechazadaPor||'—'}. Motivo: ${f.rechazadaMotivo||'—'}</div>`;
+
+  STEPS.forEach((step, i) => {
+    const stepData = f.steps[step.id];
+    const done = stepData?.status==='done';
+    const cur = i===idx && !f.rechazada;
+    const od = cur && flowOD;
+    const waiting = i>idx && !f.rechazada;
+    let cardCls = 'action-card' + (done?' completed':od?' overdue':waiting||f.rechazada?' waiting':'');
+    let badge = done ? '<span class="ac-badge badge-completado">✓ Completado</span>'
+      : od ? '<span class="ac-badge badge-vencido">⚠ Vencido</span>'
+      : cur ? '<span class="ac-badge badge-actual">● Actual</span>'
+      : `<span class="ac-badge badge-esperando">${f.rechazada?'—':'Esperando'}</span>`;
+    let body = '';
+    if (done) {
+      body = `<div class="ac-by">Por: <strong>${stepData.by||'—'}</strong></div>
+        <div class="ac-date-done">📅 ${formatDate(stepData.date)}</div>
+        ${stepData.nota?`<div style="font-size:12px;color:#64748b;margin-top:6px;">Nota: ${stepData.nota}</div>`:''}
+        ${stepData.numOC?`<div style="font-size:12px;color:#64748b;margin-top:4px;">Nº OC: <strong>${stepData.numOC}</strong></div>`:''}
+        ${stepData.ivaOk!==undefined?`<div style="font-size:12px;margin-top:4px;">IVA: <strong style="color:${stepData.ivaOk?'var(--success)':'var(--danger)'}">${stepData.ivaOk?'✓ Correcto':'✗ Observado'}</strong></div>`:''}
+        ${stepData.numPago?`<div style="font-size:12px;color:#64748b;margin-top:4px;">Nº Pago: <strong>${stepData.numPago}</strong></div>`:''}`;
+    } else if (cur) {
+      if (od) body += `<div class="ac-overdue-alert">⏰ ${getFlowDays(f)} días sin completarse. Se enviaron recordatorios.</div>`;
+      body += buildStepForm(step.id, i, f, aprobadores);
+    } else {
+      body = `<div style="font-size:13px;color:#94a3b8;">${f.rechazada?'Proceso detenido.':'Se habilitará cuando se complete el paso anterior.'}</div>`;
+    }
+    actionCards += `<div class="${cardCls}"><div class="ac-header"><div class="ac-title">${i+1}. ${step.label} <span style="font-size:11px;color:#94a3b8;font-weight:400;">· ${step.area}</span></div>${badge}</div>${body}</div>`;
+  });
+
+  const hasOC = f.steps['orden_compra']?.numOC, hasPago = f.steps['tesoreria']?.numPago;
+  const summaryHtml = (hasOC||hasPago) ? `<div class="info-grid"><div class="ig-title">Resumen de cierre</div><div class="ig-fields">
+    <div class="ig-field"><div class="ig-label">Nº Factura</div><div class="ig-value">${f.numFactura||'—'}</div></div>
+    <div class="ig-field"><div class="ig-label">Nº OC</div><div class="ig-value">${f.steps['orden_compra']?.numOC||'—'}</div></div>
+    ${hasPago?`<div class="ig-field"><div class="ig-label">Nº Pago</div><div class="ig-value">${f.steps['tesoreria'].numPago}</div></div>`:''}
+    <div class="ig-field"><div class="ig-label">Estado</div><div class="ig-value">${getStatusLabel(f)}</div></div>
+  </div></div>` : '';
+
+  const pdfHtml = f.pdfData ? `<div class="pdf-section"><div class="ig-title">Factura adjunta</div>
+    <div class="pdf-link" onclick="openPdf('${f.id}')">📄 ${f.pdfName||'factura.pdf'} <span style="color:#94a3b8;font-size:11px;">— Ver documento</span></div></div>` : '';
+
+  const personaEmail = getPersonaEmail(f.cargadoPor);
+  panel.innerHTML = `
+    <div class="detail-header">
+      <div>
+        <div class="detail-h1">${f.proveedor||'—'}</div>
+        <div class="detail-sub">Factura Nº ${f.numFactura||'—'} · Cargado por ${f.cargadoPor||'—'}${personaEmail?' ('+personaEmail+')':''} · ${formatDate(f.createdAt)}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="detail-monto">${formatMonto(f.monto)}</div>
+        <div class="detail-monto-label">Aprobadores: ${getAprobador(f.monto).join(' + ')}</div>
+      </div>
+    </div>
+    ${buildPayCountdown(f)}
+    <div class="progress-track">
+      <div class="pt-title">Progreso del proceso</div>
+      <div class="steps-visual">${stepsHtml}</div>
+    </div>
+    <div class="info-grid"><div class="ig-title">Datos de la factura</div><div class="ig-fields">
+      <div class="ig-field"><div class="ig-label">Proveedor</div><div class="ig-value">${f.proveedor||'—'}</div></div>
+      <div class="ig-field"><div class="ig-label">Nº Factura</div><div class="ig-value">${f.numFactura||'—'}</div></div>
+      <div class="ig-field"><div class="ig-label">Monto</div><div class="ig-value">${formatMonto(f.monto)}</div></div>
+      <div class="ig-field"><div class="ig-label">Fecha factura</div><div class="ig-value">${formatDate(f.fechaFactura)}</div></div>
+      <div class="ig-field"><div class="ig-label">Cargado por</div><div class="ig-value">${f.cargadoPor||'—'}${personaEmail?' · <span style="color:var(--azul);font-size:12px;">'+personaEmail+'</span>':' · <span style="color:var(--gray-400);font-size:12px;">sin email registrado</span>'}</div></div>
+      <div class="ig-field"><div class="ig-label">Ingreso al sistema</div><div class="ig-value">${formatDate(f.createdAt)}</div></div>
+      <div class="ig-field" style="grid-column:1/-1"><div class="ig-label">Concepto</div><div class="ig-value">${f.concepto||'—'}</div></div>
+    </div></div>
+    ${pdfHtml}${summaryHtml}${actionCards}`;
+}
+
+function buildStepForm(stepId, idx, f, aprobadores) {
+  const today = new Date().toISOString().split('T')[0];
+  const apStr = aprobadores.length>1?'es':'';
+  switch(stepId) {
+    case 'aprobacion_inicial': return `<div class="ac-form">
+      <div style="font-size:13px;color:#64748b;margin-bottom:4px;">Aprobador${apStr}: <strong>${aprobadores.join(' y ')}</strong></div>
+      <label>Aprobado por</label><input type="text" id="sf_by" value="${aprobadores[0]}">
+      <label>Fecha</label><input type="date" id="sf_date" value="${today}">
+      <label>Nota (opcional)</label><textarea id="sf_nota" placeholder="Observaciones..."></textarea>
+      <div class="btn-row"><button class="btn-aprobar" onclick="completeStep('${stepId}')">✓ Aprobar</button><button class="btn-rechazar" onclick="rechazarStep('${stepId}')">✗ Rechazar</button></div></div>`;
+    case 'orden_compra': return `<div class="ac-form">
+      <label>Número de Orden de Compra</label><input type="text" id="sf_numOC" placeholder="Ej: OC-2024-0158">
+      <label>Generado por (Compras)</label><input type="text" id="sf_by" placeholder="Nombre">
+      <label>Fecha</label><input type="date" id="sf_date" value="${today}">
+      <label>Nota (opcional)</label><textarea id="sf_nota" placeholder="Observaciones..."></textarea>
+      <button class="btn-aprobar" onclick="completeStep('${stepId}')">✓ Generar OC</button></div>`;
+    case 'aprobacion_oc': return `<div class="ac-form">
+      <div style="font-size:13px;color:#64748b;margin-bottom:4px;">Aprobador${apStr}: <strong>${aprobadores.join(' y ')}</strong></div>
+      <div style="font-size:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;color:#15803d;">OC Nº <strong>${f.steps['orden_compra']?.numOC||'—'}</strong></div>
+      <label>Aprobado por</label><input type="text" id="sf_by" value="${aprobadores[0]}">
+      <label>Fecha</label><input type="date" id="sf_date" value="${today}">
+      <label>Nota (opcional)</label><textarea id="sf_nota" placeholder="Observaciones..."></textarea>
+      <div class="btn-row"><button class="btn-aprobar" onclick="completeStep('${stepId}')">✓ Aprobar OC</button><button class="btn-rechazar" onclick="rechazarStep('${stepId}')">✗ Rechazar</button></div></div>`;
+    case 'asociacion': return `<div class="ac-form">
+      <div style="font-size:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px 12px;color:#1d4ed8;">Factura <strong>Nº ${f.numFactura}</strong> → OC <strong>${f.steps['orden_compra']?.numOC||'—'}</strong></div>
+      <label>Asociado por (Proveedores)</label><input type="text" id="sf_by" placeholder="Nombre">
+      <label>Fecha</label><input type="date" id="sf_date" value="${today}">
+      <label>Nota (opcional)</label><textarea id="sf_nota" placeholder="Observaciones..."></textarea>
+      <button class="btn-aprobar" onclick="completeStep('${stepId}')">✓ Confirmar asociación</button></div>`;
+    case 'impuestos': return `<div class="ac-form">
+      <label>IVA correctamente aplicado</label>
+      <select id="sf_ivaOk"><option value="true">✓ Sí, IVA correcto</option><option value="false">✗ IVA con observaciones</option></select>
+      <label>Revisado por (Impuestos)</label><input type="text" id="sf_by" placeholder="Nombre">
+      <label>Fecha</label><input type="date" id="sf_date" value="${today}">
+      <label>Nota</label><textarea id="sf_nota" placeholder="Detalles sobre el IVA..."></textarea>
+      <div class="btn-row"><button class="btn-aprobar" onclick="completeStep('${stepId}')">✓ Confirmar</button><button class="btn-rechazar" onclick="rechazarStep('${stepId}')">✗ Observar</button></div></div>`;
+    case 'tesoreria': return `<div class="ac-form">
+      <label>Número de pago / transferencia</label><input type="text" id="sf_numPago" placeholder="Ej: TRF-2024-00892">
+      <label>Pagado por (Tesorería)</label><input type="text" id="sf_by" placeholder="Nombre">
+      <label>Fecha de pago</label><input type="date" id="sf_date" value="${today}">
+      <label>Nota (opcional)</label><textarea id="sf_nota" placeholder="Observaciones..."></textarea>
+      <button class="btn-aprobar" onclick="completeStep('${stepId}')">✓ Confirmar pago</button></div>`;
+    default: return '';
+  }
+}
+
+// ==================== ACTIONS ====================
+async function completeStep(stepId) {
+  const f = facturas.find(x=>x.id===selectedId);
+  if (!f) return;
+  const by = document.getElementById('sf_by')?.value?.trim();
+  const date = document.getElementById('sf_date')?.value;
+  const nota = document.getElementById('sf_nota')?.value?.trim();
+  const numOC = document.getElementById('sf_numOC')?.value?.trim();
+  const numPago = document.getElementById('sf_numPago')?.value?.trim();
+  const ivaOkEl = document.getElementById('sf_ivaOk');
+  const ivaOk = ivaOkEl ? ivaOkEl.value==='true' : undefined;
+  if (!by) { alert('Ingresá el nombre del responsable.'); return; }
+  if (stepId==='orden_compra' && !numOC) { alert('Ingresá el número de OC.'); return; }
+  if (stepId==='tesoreria' && !numPago) { alert('Ingresá el número de pago.'); return; }
+
+  f.steps[stepId] = { status:'done', by, date, nota, doneAt: Date.now() };
+  if (numOC) f.steps[stepId].numOC = numOC;
+  if (numPago) f.steps[stepId].numPago = numPago;
+  if (ivaOk!==undefined) f.steps[stepId].ivaOk = ivaOk;
+  await dbSave(f);
+
+  const curIdx = STEPS.findIndex(s=>s.id===stepId);
+  const nextStep = STEPS[curIdx+1];
+  if (nextStep) {
+    const emailKey = nextStep.emailKey;
+    let emails = emailKey ? [config.emails?.[emailKey]].filter(Boolean) : getAprobadorEmails(f.monto);
+    const personaEmail = getPersonaEmail(f.cargadoPor);
+    if (personaEmail && !emails.includes(personaEmail)) emails.push(personaEmail);
+    const msg = `La factura ${f.numFactura} (${f.proveedor}, ${formatMonto(f.monto)}) avanzó al paso "${nextStep.label}". Por favor completá tu acción.`;
+    addNotifLog(`➡ Factura ${f.numFactura} avanzó a "${nextStep.label}"`, 'info', f.id);
+    sendPushNotif(`Nuevo paso: ${nextStep.label}`, msg);
+    if (emails.length) await sendEmail(emails, `Acción requerida: ${nextStep.
