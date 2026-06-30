@@ -178,6 +178,11 @@
   .file-drop-text span { color: var(--azul); font-weight: 600; }
   .file-selected { font-size: 12px; color: var(--success); font-weight: 500; margin-top: 6px; }
   #fileInput { display: none; }
+  .file-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 8px; margin-top: 6px; font-size: 12px; color: var(--gray-700); }
+  .file-item .fi-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-item .fi-remove { cursor: pointer; color: var(--gray-400); font-size: 14px; padding: 0 4px; }
+  .file-item .fi-remove:hover { color: var(--danger); }
+  .files-count-hint { font-size: 11px; color: var(--gray-400); margin-top: 6px; }
   .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
   .btn-cancel { padding: 10px 20px; border-radius: 8px; border: 1.5px solid var(--gray-200); background: white; font-family: 'Poppins', sans-serif; font-size: 13px; font-weight: 500; color: var(--gray-500); cursor: pointer; }
   .btn-submit { padding: 10px 24px; border-radius: 8px; border: none; background: var(--azul); color: white; font-family: 'Poppins', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
@@ -198,6 +203,7 @@
   .config-field input { width: 100%; padding: 9px 12px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-family: 'Poppins', sans-serif; font-size: 12px; color: var(--gray-700); outline: none; transition: border-color .15s; }
   .config-field input:focus { border-color: var(--azul); }
   .config-field .field-hint { font-size: 11px; color: var(--gray-400); margin-top: 3px; }
+  .field-hint { font-size: 11px; color: var(--gray-400); }
   .btn-add-person { width: 100%; padding: 8px; border-radius: 7px; border: 1.5px dashed var(--gray-200); background: transparent; font-family: 'Poppins', sans-serif; font-size: 12px; color: var(--gray-500); cursor: pointer; transition: all .15s; margin-bottom: 4px; }
   .btn-add-person:hover { border-color: var(--azul); color: var(--azul); background: #e8f4fd; }
   .btn-remove-person { background: none; border: none; color: var(--gray-400); cursor: pointer; font-size: 16px; padding: 0 4px; align-self: center; }
@@ -298,20 +304,34 @@
       <input type="text" id="mProveedor" placeholder="Nombre del proveedor">
       <label>Número de factura</label>
       <input type="text" id="mNumFact" placeholder="Ej: 0001-00004821">
-      <label>Monto (USD)</label>
-      <input type="number" id="mMonto" placeholder="0.00" min="0" step="0.01" oninput="updateAprobadorHint()">
+      <label>Moneda y monto</label>
+      <div style="display:flex; gap:8px;">
+        <select id="mMoneda" onchange="onMonedaChange()" style="width:110px; flex-shrink:0; padding:11px 10px; border:1.5px solid var(--gray-200); border-radius:8px; font-family:'Poppins',sans-serif; font-size:13px; color:var(--gray-700);">
+          <option value="USD">USD $</option>
+          <option value="ARS">ARS $</option>
+        </select>
+        <input type="number" id="mMonto" placeholder="0.00" min="0" step="0.01" style="flex:1" oninput="updateAprobadorHint()">
+      </div>
+      <div id="tcWrap" style="display:none;">
+        <label>Tipo de cambio (1 USD = X ARS)</label>
+        <div style="display:flex; gap:8px; align-items:flex-start;">
+          <input type="number" id="mTC" placeholder="Ej: 1050" min="0" step="0.01" style="flex:1" oninput="updateAprobadorHint()">
+          <button type="button" id="btnTC" onclick="fetchTipoCambio()" style="flex-shrink:0; padding:11px 14px; border-radius:8px; border:1.5px solid var(--azul); background:transparent; color:var(--azul); font-family:'Poppins',sans-serif; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">↻ Actualizar</button>
+        </div>
+        <div class="field-hint" id="tcSourceHint" style="margin-top:4px;"></div>
+      </div>
       <div class="hint-box" id="aprobadorHint" style="display:none"></div>
       <label>Descripción / Concepto</label>
       <textarea id="mConcepto" placeholder="Descripción del servicio o producto..."></textarea>
       <label>Fecha de factura</label>
       <input type="date" id="mFecha">
-      <label>PDF de la factura</label>
+      <label>Archivos adjuntos (hasta 10)</label>
       <div class="file-drop" id="fileDrop" onclick="document.getElementById('fileInput').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave()" ondrop="handleDrop(event)">
         <div class="file-drop-icon">📄</div>
-        <div class="file-drop-text">Arrastrá el archivo o <span>hacé clic para seleccionar</span></div>
-        <input type="file" id="fileInput" accept=".pdf" onchange="handleFile(this.files[0])">
-        <div class="file-selected" id="fileSelected" style="display:none"></div>
+        <div class="file-drop-text">Arrastrá los archivos o <span>hacé clic para seleccionar</span></div>
+        <input type="file" id="fileInput" accept=".pdf" multiple onchange="handleFiles(this.files)">
       </div>
+      <div id="filesList"></div>
       <label>Cargado por</label>
       <input type="text" id="mCargadoPor" placeholder="Tu nombre" oninput="onCargadoPorInput()">
       <div class="person-hint" id="cargadorHint"></div>
@@ -499,7 +519,7 @@ const STEPS = [
   { id: 'tesoreria',          label: 'Tesorería / Pago',  area: 'Tesorería',    emailKey: 'tesoreria' }
 ];
 
-let facturas = [], selectedId = null, activeFilter = 'all', pdfFile = null, pdfDataUrl = null, notifLog = [];
+let facturas = [], selectedId = null, activeFilter = 'all', pdfFiles = [], notifLog = [];
 
 async function init() {
   facturas = await dbGet();
@@ -593,6 +613,13 @@ function getFlowDays(f) {
   return Math.floor((Date.now() - lastTs) / (1000 * 60 * 60 * 24));
 }
 function formatMonto(n) { return 'USD ' + Number(n).toLocaleString('es-AR', {minimumFractionDigits:2,maximumFractionDigits:2}); }
+function formatMontoARS(n) { return 'ARS $' + Number(n).toLocaleString('es-AR', {minimumFractionDigits:2,maximumFractionDigits:2}); }
+function formatMontoFactura(f) {
+  if (f.moneda === 'ARS') {
+    return formatMontoARS(f.monto) + (f.montoUSD ? ' <span style="font-weight:400;color:var(--gray-400);font-size:11px;">(≈ ' + formatMonto(f.montoUSD) + ')</span>' : '');
+  }
+  return formatMonto(f.monto);
+}
 function formatDate(iso) { if (!iso) return '—'; return new Date(iso).toLocaleDateString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric'}); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
@@ -609,7 +636,7 @@ async function checkOverdueFacturas() {
       addNotifLog(msg, 'overdue', f.id);
       sendPushNotif('Factura sin movimiento · UA', msg);
       const emailKey = STEPS[idx] ? STEPS[idx].emailKey : null;
-      let emails = emailKey ? [config.emails[emailKey]].filter(Boolean) : getAprobadorEmails(f.monto);
+      let emails = emailKey ? [config.emails[emailKey]].filter(Boolean) : getAprobadorEmails(f.montoUSD != null ? f.montoUSD : f.monto);
       const personaEmail = getPersonaEmail(f.cargadoPor);
       if (personaEmail && emails.indexOf(personaEmail) === -1) emails.push(personaEmail);
       if (emails.length) await sendEmail(emails, 'Recordatorio: Factura ' + f.numFactura + ' requiere acción', msg, f);
@@ -786,7 +813,7 @@ function renderList() {
     }
 
     return '<div class="factura-card ' + (f.id === selectedId ? 'active' : '') + ' ' + borderCls + '" onclick="selectFactura(\'' + f.id + '\')">' +
-      '<div class="fc-top"><div class="fc-proveedor">' + (f.proveedor||'—') + '</div><div class="fc-monto">' + formatMonto(f.monto) + '</div></div>' +
+      '<div class="fc-top"><div class="fc-proveedor">' + (f.proveedor||'—') + '</div><div class="fc-monto">' + formatMontoFactura(f) + '</div></div>' +
       '<div class="fc-mid"><div class="fc-num">Nº ' + (f.numFactura||'—') + '</div><div class="fc-fecha">' + formatDate(f.fechaFactura) + '</div></div>' +
       '<div class="fc-step-bar">' + dots + '</div>' +
       '<div class="fc-status-label">' + (f.rechazada ? '🔴 ' : idx >= STEPS.length ? '✅ ' : flowOD ? '⏱ ' : '🔵 ') + getStatusLabel(f) + '</div>' +
@@ -828,7 +855,7 @@ function renderDetail() {
   if (!f) { panel.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🧾</div><p>Seleccioná una factura</p></div>'; return; }
 
   const idx = getStepIndex(f);
-  const aprobadores = getAprobador(f.monto);
+  const aprobadores = getAprobador(f.montoUSD != null ? f.montoUSD : f.monto);
   const flowOD = isFlowOverdue(f);
 
   const stepsHtml = STEPS.map(function(s, i) {
@@ -880,8 +907,10 @@ function renderDetail() {
     '<div class="ig-field"><div class="ig-label">Estado</div><div class="ig-value">' + getStatusLabel(f) + '</div></div>' +
     '</div></div>' : '';
 
-  const pdfHtml = f.pdfData ? '<div class="pdf-section"><div class="ig-title">Factura adjunta</div>' +
-    '<div class="pdf-link" onclick="openPdf(\'' + f.id + '\')">📄 ' + (f.pdfName||'factura.pdf') + ' <span style="color:#94a3b8;font-size:11px;">— Ver documento</span></div></div>' : '';
+  const pdfHtml = (f.pdfFiles && f.pdfFiles.length) ? '<div class="pdf-section"><div class="ig-title">Archivos adjuntos (' + f.pdfFiles.length + ')</div>' +
+    f.pdfFiles.map(function(pf, i) {
+      return '<div class="pdf-link" style="margin-bottom:6px;" onclick="openPdf(\'' + f.id + '\',' + i + ')">📄 ' + pf.name + ' <span style="color:#94a3b8;font-size:11px;">— Ver documento</span></div>';
+    }).join('') + '</div>' : '';
 
   const personaEmail = getPersonaEmail(f.cargadoPor);
   panel.innerHTML =
@@ -889,15 +918,16 @@ function renderDetail() {
     '<div class="detail-h1">' + (f.proveedor||'—') + '</div>' +
     '<div class="detail-sub">Factura Nº ' + (f.numFactura||'—') + ' · Cargado por ' + (f.cargadoPor||'—') + (personaEmail ? ' (' + personaEmail + ')' : '') + ' · ' + formatDate(f.createdAt) + '</div>' +
     '</div><div style="text-align:right">' +
-    '<div class="detail-monto">' + formatMonto(f.monto) + '</div>' +
-    '<div class="detail-monto-label">Aprobadores: ' + getAprobador(f.monto).join(' + ') + '</div>' +
+    '<div class="detail-monto">' + formatMontoFactura(f) + '</div>' +
+    '<div class="detail-monto-label">Aprobadores: ' + getAprobador(f.montoUSD != null ? f.montoUSD : f.monto).join(' + ') + '</div>' +
     '</div></div>' +
     buildPayCountdown(f) +
     '<div class="progress-track"><div class="pt-title">Progreso del proceso</div><div class="steps-visual">' + stepsHtml + '</div></div>' +
     '<div class="info-grid"><div class="ig-title">Datos de la factura</div><div class="ig-fields">' +
     '<div class="ig-field"><div class="ig-label">Proveedor</div><div class="ig-value">' + (f.proveedor||'—') + '</div></div>' +
     '<div class="ig-field"><div class="ig-label">Nº Factura</div><div class="ig-value">' + (f.numFactura||'—') + '</div></div>' +
-    '<div class="ig-field"><div class="ig-label">Monto</div><div class="ig-value">' + formatMonto(f.monto) + '</div></div>' +
+    '<div class="ig-field"><div class="ig-label">Monto</div><div class="ig-value">' + formatMontoFactura(f) + '</div></div>' +
+    (f.moneda === 'ARS' ? '<div class="ig-field"><div class="ig-label">Tipo de cambio usado</div><div class="ig-value">1 USD = $' + Number(f.tc).toLocaleString('es-AR', {minimumFractionDigits:2,maximumFractionDigits:2}) + '</div></div>' : '') +
     '<div class="ig-field"><div class="ig-label">Fecha factura</div><div class="ig-value">' + formatDate(f.fechaFactura) + '</div></div>' +
     '<div class="ig-field"><div class="ig-label">Cargado por</div><div class="ig-value">' + (f.cargadoPor||'—') + (personaEmail ? ' · <span style="color:var(--azul);font-size:12px;">' + personaEmail + '</span>' : ' · <span style="color:var(--gray-400);font-size:12px;">sin email registrado</span>') + '</div></div>' +
     '<div class="ig-field"><div class="ig-label">Ingreso al sistema</div><div class="ig-value">' + formatDate(f.createdAt) + '</div></div>' +
@@ -973,10 +1003,10 @@ async function completeStep(stepId) {
   const nextStep = STEPS[curIdx + 1];
   if (nextStep) {
     const emailKey = nextStep.emailKey;
-    let emails = emailKey ? [config.emails[emailKey]].filter(Boolean) : getAprobadorEmails(f.monto);
+    let emails = emailKey ? [config.emails[emailKey]].filter(Boolean) : getAprobadorEmails(f.montoUSD != null ? f.montoUSD : f.monto);
     const personaEmail = getPersonaEmail(f.cargadoPor);
     if (personaEmail && emails.indexOf(personaEmail) === -1) emails.push(personaEmail);
-    const msg = 'La factura ' + f.numFactura + ' (' + f.proveedor + ', ' + formatMonto(f.monto) + ') avanzó al paso "' + nextStep.label + '". Por favor completá tu acción.';
+    const msg = 'La factura ' + f.numFactura + ' (' + f.proveedor + ', ' + formatMontoFactura(f).replace(/<[^>]+>/g,'') + ') avanzó al paso "' + nextStep.label + '". Por favor completá tu acción.';
     addNotifLog('➡ Factura ' + f.numFactura + ' avanzó a "' + nextStep.label + '"', 'info', f.id);
     sendPushNotif('Nuevo paso: ' + nextStep.label, msg);
     if (emails.length) await sendEmail(emails, 'Acción requerida: ' + nextStep.label + ' · ' + f.numFactura, msg, f);
@@ -1011,71 +1041,164 @@ async function rechazarStep(stepId) {
   renderList(); renderDetail();
 }
 
-function openPdf(id) {
+function openPdf(id, idx) {
   const f = facturas.find(function(x) { return x.id === id; });
-  if (!f || !f.pdfData) return;
+  if (!f || !f.pdfFiles || !f.pdfFiles[idx]) return;
   const win = window.open();
-  win.document.write('<iframe src="' + f.pdfData + '" style="width:100%;height:100vh;border:none;"></iframe>');
+  win.document.write('<iframe src="' + f.pdfFiles[idx].data + '" style="width:100%;height:100vh;border:none;"></iframe>');
 }
 
 function openModal() {
   document.getElementById('modalOverlay').classList.add('open');
   document.getElementById('mFecha').value = new Date().toISOString().split('T')[0];
-  pdfFile = null; pdfDataUrl = null;
-  document.getElementById('fileSelected').style.display = 'none';
+  document.getElementById('mMoneda').value = 'USD';
+  document.getElementById('mTC').value = '';
+  document.getElementById('tcWrap').style.display = 'none';
+  document.getElementById('tcSourceHint').textContent = '';
+  pdfFiles = [];
+  renderFilesList();
   document.getElementById('cargadorHint').style.display = 'none';
 }
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('open');
   ['mProveedor','mNumFact','mMonto','mConcepto','mCargadoPor'].forEach(function(id) { document.getElementById(id).value = ''; });
   document.getElementById('aprobadorHint').style.display = 'none';
+  pdfFiles = [];
+  renderFilesList();
 }
+function onMonedaChange() {
+  const moneda = document.getElementById('mMoneda').value;
+  document.getElementById('tcWrap').style.display = moneda === 'ARS' ? 'block' : 'none';
+  if (moneda === 'ARS' && !document.getElementById('mTC').value) {
+    fetchTipoCambio();
+  }
+  updateAprobadorHint();
+}
+
+async function fetchTipoCambio() {
+  const btn = document.getElementById('btnTC');
+  const hint = document.getElementById('tcSourceHint');
+  const original = btn.textContent;
+  btn.textContent = '⏳...';
+  btn.disabled = true;
+  try {
+    const res = await fetch('https://dolarapi.com/v1/dolares/oficial');
+    if (!res.ok) throw new Error('fetch failed');
+    const data = await res.json();
+    const valor = data.venta || data.promedio || data.compra;
+    if (!valor) throw new Error('sin valor');
+    document.getElementById('mTC').value = valor;
+    hint.style.color = '#15803d';
+    hint.textContent = '✓ Dólar oficial (BCRA) — venta $' + valor + ' al ' + (data.fechaActualizacion ? new Date(data.fechaActualizacion).toLocaleDateString('es-AR') : 'hoy');
+    updateAprobadorHint();
+  } catch (err) {
+    hint.style.color = '#c2410c';
+    hint.textContent = '⚠ No se pudo obtener el tipo de cambio automático. Ingresalo manualmente.';
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+}
+
+function getMontoUSD(monto, moneda, tc) {
+  if (moneda === 'ARS') {
+    if (!tc || tc <= 0) return null;
+    return monto / tc;
+  }
+  return monto;
+}
+
 function updateAprobadorHint() {
   const m = parseFloat(document.getElementById('mMonto').value);
+  const moneda = document.getElementById('mMoneda').value;
+  const tc = parseFloat(document.getElementById('mTC').value);
   const hint = document.getElementById('aprobadorHint');
   if (!m || m <= 0) { hint.style.display = 'none'; return; }
-  const ap = getAprobador(m);
+  if (moneda === 'ARS' && (!tc || tc <= 0)) {
+    hint.style.display = 'block';
+    hint.textContent = 'Ingresá el tipo de cambio para calcular el aprobador.';
+    return;
+  }
+  const montoUSD = getMontoUSD(m, moneda, tc);
+  const ap = getAprobador(montoUSD);
   hint.style.display = 'block';
-  hint.textContent = 'Aprobador' + (ap.length > 1 ? 'es' : '') + ': ' + ap.join(' y ');
+  hint.textContent = (moneda === 'ARS' ? 'Equivalente: ' + formatMonto(montoUSD) + ' · ' : '') + 'Aprobador' + (ap.length > 1 ? 'es' : '') + ': ' + ap.join(' y ');
 }
 function handleDragOver(e) { e.preventDefault(); document.getElementById('fileDrop').classList.add('drag-over'); }
 function handleDragLeave() { document.getElementById('fileDrop').classList.remove('drag-over'); }
-function handleDrop(e) { e.preventDefault(); document.getElementById('fileDrop').classList.remove('drag-over'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }
-function handleFile(file) {
-  if (!file || file.type !== 'application/pdf') { alert('Solo se aceptan archivos PDF.'); return; }
-  pdfFile = file;
-  const r = new FileReader();
-  r.onload = function(e) {
-    pdfDataUrl = e.target.result;
-    document.getElementById('fileSelected').style.display = 'block';
-    document.getElementById('fileSelected').textContent = '✓ ' + file.name;
-  };
-  r.readAsDataURL(file);
+function handleDrop(e) { e.preventDefault(); document.getElementById('fileDrop').classList.remove('drag-over'); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); }
+
+function renderFilesList() {
+  const el = document.getElementById('filesList');
+  if (!pdfFiles.length) { el.innerHTML = ''; return; }
+  let html = pdfFiles.map(function(f, i) {
+    return '<div class="file-item"><span>📄</span><span class="fi-name">' + f.name + '</span><span class="fi-remove" onclick="removeFile(' + i + ')">✕</span></div>';
+  }).join('');
+  html += '<div class="files-count-hint">' + pdfFiles.length + ' de 10 archivos adjuntos</div>';
+  el.innerHTML = html;
 }
+
+function removeFile(idx) {
+  pdfFiles.splice(idx, 1);
+  renderFilesList();
+}
+
+function handleFiles(fileList) {
+  const incoming = Array.from(fileList).filter(function(f) { return f.type === 'application/pdf'; });
+  const rejected = fileList.length - incoming.length;
+  if (rejected > 0) alert('Solo se aceptan archivos PDF. Se ignoraron ' + rejected + ' archivo(s).');
+
+  if (pdfFiles.length + incoming.length > 10) {
+    const espacioDisponible = 10 - pdfFiles.length;
+    if (espacioDisponible <= 0) { alert('Ya alcanzaste el máximo de 10 archivos adjuntos.'); return; }
+    alert('Solo se pueden adjuntar hasta 10 archivos. Se agregarán los primeros ' + espacioDisponible + '.');
+    incoming.splice(espacioDisponible);
+  }
+
+  let pending = incoming.length;
+  if (!pending) return;
+  incoming.forEach(function(file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      pdfFiles.push({ name: file.name, data: e.target.result });
+      pending--;
+      if (pending === 0) renderFilesList();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 async function crearFactura() {
   const proveedor = document.getElementById('mProveedor').value.trim();
   const numFactura = document.getElementById('mNumFact').value.trim();
   const monto = parseFloat(document.getElementById('mMonto').value);
+  const moneda = document.getElementById('mMoneda').value;
+  const tc = parseFloat(document.getElementById('mTC').value);
   const concepto = document.getElementById('mConcepto').value.trim();
   const fechaFactura = document.getElementById('mFecha').value;
   const cargadoPor = document.getElementById('mCargadoPor').value.trim();
   if (!proveedor) { alert('Ingresá el proveedor.'); return; }
   if (!numFactura) { alert('Ingresá el número de factura.'); return; }
   if (!monto || monto <= 0) { alert('Ingresá un monto válido.'); return; }
+  if (moneda === 'ARS' && (!tc || tc <= 0)) { alert('Ingresá el tipo de cambio para convertir a USD.'); return; }
   if (!cargadoPor) { alert('Ingresá tu nombre.'); return; }
 
+  const montoUSD = getMontoUSD(monto, moneda, tc);
+
   const nueva = {
-    id: uid(), proveedor: proveedor, numFactura: numFactura, monto: monto, concepto: concepto,
-    fechaFactura: fechaFactura, cargadoPor: cargadoPor, createdAt: Date.now(), steps: {},
-    rechazada: false, pdfName: pdfFile ? pdfFile.name : null, pdfData: pdfDataUrl || null
+    id: uid(), proveedor: proveedor, numFactura: numFactura,
+    monto: monto, moneda: moneda, tc: moneda === 'ARS' ? tc : null, montoUSD: montoUSD,
+    concepto: concepto, fechaFactura: fechaFactura, cargadoPor: cargadoPor, createdAt: Date.now(), steps: {},
+    rechazada: false, pdfFiles: pdfFiles.slice()
   };
   facturas.push(nueva);
   await dbSave(nueva);
 
-  const aps = getAprobador(monto);
-  const apEmails = getAprobadorEmails(monto);
+  const aps = getAprobador(montoUSD);
+  const apEmails = getAprobadorEmails(montoUSD);
   const personaEmail = getPersonaEmail(cargadoPor);
-  const msg = 'Nueva factura ingresada: ' + numFactura + ' · ' + proveedor + ' · ' + formatMonto(monto) + '. Requiere aprobación de ' + aps.join(' y ') + '.';
+  const montoStr = (moneda === 'ARS') ? formatMontoARS(monto) + ' (≈ ' + formatMonto(montoUSD) + ')' : formatMonto(monto);
+  const msg = 'Nueva factura ingresada: ' + numFactura + ' · ' + proveedor + ' · ' + montoStr + '. Requiere aprobación de ' + aps.join(' y ') + '.';
   addNotifLog('🆕 Nueva factura ' + numFactura + ' (' + proveedor + ') esperando aprobación', 'info', nueva.id);
   sendPushNotif('Nueva factura ingresada · UA', msg);
   let emails = apEmails.slice();
@@ -1088,7 +1211,6 @@ async function crearFactura() {
   renderList(); renderDetail();
 }
 
-document.getElementById('modalOverlay').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
 init();
 </script>
 </body>
