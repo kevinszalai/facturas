@@ -560,10 +560,11 @@ const STEPS = [
   { id: 'tesoreria',          label: 'Tesorería / Pago',  area: 'Tesorería',    emailKey: 'tesoreria' }
 ];
 
-let facturas = [], selectedId = null, activeFilter = 'all', pdfFiles = [], notifLog = [], datosFacturaOpen = false;
+let facturas = [], selectedId = null, activeFilter = 'all', pdfFiles = [], notifLog = [];
+let seccionesOpen = { datos: false, adjuntos: false, resumen: false };
 
-function toggleDatosFactura() {
-  datosFacturaOpen = !datosFacturaOpen;
+function toggleSeccion(nombre) {
+  seccionesOpen[nombre] = !seccionesOpen[nombre];
   renderDetail();
 }
 
@@ -895,7 +896,7 @@ function renderList() {
   }).join('');
 }
 
-function selectFactura(id) { selectedId = id; datosFacturaOpen = false; renderList(); renderDetail(); }
+function selectFactura(id) { selectedId = id; seccionesOpen = { datos: false, adjuntos: false, resumen: false }; renderList(); renderDetail(); }
 
 function buildPayCountdown(f) {
   const paid = !!(f.steps.tesoreria && f.steps.tesoreria.status);
@@ -962,12 +963,15 @@ function renderDetail() {
           '<div style="flex:1; padding:7px 10px; border-radius:7px; font-size:11px; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0;">✓ Leonardo Napal — ' + formatDate(stepData.napal.date) + '</div>' +
           '</div>'
         : '';
+      const esUltimoCompletado = (i === idx - 1) && !f.rechazada;
+      const volverBtn = esUltimoCompletado ? '<button onclick="volverPaso(\'' + step.id + '\')" style="margin-top:10px; background:transparent; border:1.5px solid var(--gray-200); color:var(--gray-500); padding:6px 12px; border-radius:7px; font-family:\'Poppins\',sans-serif; font-size:11px; font-weight:600; cursor:pointer;">← Volver a este paso</button>' : '';
       body = dualInfo + '<div class="ac-by">Por: <strong>' + (stepData.by||'—') + '</strong></div>' +
         '<div class="ac-date-done">📅 ' + formatDate(stepData.date) + '</div>' +
         (stepData.nota ? '<div style="font-size:12px;color:#64748b;margin-top:6px;">Nota: ' + stepData.nota + '</div>' : '') +
         (stepData.numOC ? '<div style="font-size:12px;color:#64748b;margin-top:4px;">Nº OC: <strong>' + stepData.numOC + '</strong></div>' : '') +
         (stepData.ivaOk !== undefined ? '<div style="font-size:12px;margin-top:4px;">IVA: <strong style="color:' + (stepData.ivaOk ? 'var(--success)' : 'var(--danger)') + '">' + (stepData.ivaOk ? '✓ Correcto' : '✗ Observado') + '</strong></div>' : '') +
-        (stepData.numPago ? '<div style="font-size:12px;color:#64748b;margin-top:4px;">Nº Pago: <strong>' + stepData.numPago + '</strong></div>' : '');
+        (stepData.numPago ? '<div style="font-size:12px;color:#64748b;margin-top:4px;">Nº Pago: <strong>' + stepData.numPago + '</strong></div>' : '') +
+        volverBtn;
     } else if (cur) {
       if (od) body += '<div class="ac-overdue-alert">⏰ ' + getFlowDays(f) + ' días sin completarse. Se enviaron recordatorios.</div>';
       body += buildStepForm(step.id, i, f, aprobadores);
@@ -979,17 +983,17 @@ function renderDetail() {
 
   const hasOC = f.steps.orden_compra && f.steps.orden_compra.numOC;
   const hasPago = f.steps.tesoreria && f.steps.tesoreria.numPago;
-  const summaryHtml = (hasOC || hasPago) ? '<div class="info-grid"><div class="ig-title">Resumen de cierre</div><div class="ig-fields">' +
+  const summaryHtml = (hasOC || hasPago) ? '<div class="info-grid"><div class="ig-title ig-title-toggle" onclick="toggleSeccion(\'resumen\')" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; margin-bottom:' + (seccionesOpen.resumen ? '16px' : '0') + ';">Resumen de cierre <span style="font-size:10px; transition:transform .2s; transform:rotate(' + (seccionesOpen.resumen ? '180deg' : '0deg') + ');">▼</span></div><div class="ig-fields" style="display:' + (seccionesOpen.resumen ? 'grid' : 'none') + ';">' +
     '<div class="ig-field"><div class="ig-label">Nº Factura</div><div class="ig-value">' + (f.numFactura||'—') + '</div></div>' +
     '<div class="ig-field"><div class="ig-label">Nº OC</div><div class="ig-value">' + (hasOC||'—') + '</div></div>' +
     (hasPago ? '<div class="ig-field"><div class="ig-label">Nº Pago</div><div class="ig-value">' + hasPago + '</div></div>' : '') +
     '<div class="ig-field"><div class="ig-label">Estado</div><div class="ig-value">' + getStatusLabel(f) + '</div></div>' +
     '</div></div>' : '';
 
-  const pdfHtml = (f.pdfFiles && f.pdfFiles.length) ? '<div class="pdf-section"><div class="ig-title">Archivos adjuntos (' + f.pdfFiles.length + ')</div>' +
+  const pdfHtml = (f.pdfFiles && f.pdfFiles.length) ? '<div class="pdf-section"><div class="ig-title ig-title-toggle" onclick="toggleSeccion(\'adjuntos\')" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; margin-bottom:' + (seccionesOpen.adjuntos ? '16px' : '0') + ';">Archivos adjuntos (' + f.pdfFiles.length + ') <span style="font-size:10px; transition:transform .2s; transform:rotate(' + (seccionesOpen.adjuntos ? '180deg' : '0deg') + ');">▼</span></div><div style="display:' + (seccionesOpen.adjuntos ? 'block' : 'none') + ';">' +
     f.pdfFiles.map(function(pf, i) {
       return '<div class="pdf-link" style="margin-bottom:6px;" onclick="openPdf(\'' + f.id + '\',' + i + ')">📄 ' + pf.name + ' <span style="color:#94a3b8;font-size:11px;">— Ver documento</span></div>';
-    }).join('') + '</div>' : '';
+    }).join('') + '</div></div>' : '';
 
   const personaEmail = getPersonaEmail(f.cargadoPor);
   panel.innerHTML =
@@ -1005,7 +1009,7 @@ function renderDetail() {
     '</div></div>' +
     buildPayCountdown(f) +
     '<div class="progress-track"><div class="pt-title">Progreso del proceso</div><div class="steps-visual">' + stepsHtml + '</div></div>' +
-    '<div class="info-grid"><div class="ig-title ig-title-toggle" onclick="toggleDatosFactura()" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; margin-bottom:' + (datosFacturaOpen ? '16px' : '0') + ';">Datos de la factura <span style="font-size:10px; transition:transform .2s; transform:rotate(' + (datosFacturaOpen ? '180deg' : '0deg') + ');">▼</span></div><div class="ig-fields" style="display:' + (datosFacturaOpen ? 'grid' : 'none') + ';">' +
+    '<div class="info-grid"><div class="ig-title ig-title-toggle" onclick="toggleSeccion(\'datos\')" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; margin-bottom:' + (seccionesOpen.datos ? '16px' : '0') + ';">Datos de la factura <span style="font-size:10px; transition:transform .2s; transform:rotate(' + (seccionesOpen.datos ? '180deg' : '0deg') + ');">▼</span></div><div class="ig-fields" style="display:' + (seccionesOpen.datos ? 'grid' : 'none') + ';">' +
     '<div class="ig-field"><div class="ig-label">Proveedor</div><div class="ig-value">' + (f.proveedor||'—') + '</div></div>' +
     '<div class="ig-field"><div class="ig-label">Nº Factura</div><div class="ig-value">' + (f.numFactura||'—') + '</div></div>' +
     '<div class="ig-field"><div class="ig-label">Monto</div><div class="ig-value">' + formatMontoFactura(f) + '</div></div>' +
@@ -1133,6 +1137,19 @@ async function completeStep(stepId) {
 
   showToast('✓ Paso completado', 'success');
   await avanzarSiguientePaso(f, stepId);
+  renderList(); renderDetail();
+}
+
+async function volverPaso(stepId) {
+  const f = facturas.find(function(x) { return x.id === selectedId; });
+  if (!f) return;
+  const step = STEPS.find(function(s) { return s.id === stepId; });
+  const ok = confirm('¿Volver al paso "' + (step ? step.label : stepId) + '"?\n\nEsto va a reabrirlo para que se pueda completar de nuevo.');
+  if (!ok) return;
+  delete f.steps[stepId];
+  await dbSave(f);
+  addNotifLog('↩ Factura ' + f.numFactura + ' volvió al paso "' + (step ? step.label : stepId) + '"', 'info', f.id);
+  showToast('Paso reabierto', 'success');
   renderList(); renderDetail();
 }
 
