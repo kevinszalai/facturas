@@ -310,12 +310,12 @@
           <option value="USD">USD $</option>
           <option value="ARS">ARS $</option>
         </select>
-        <input type="number" id="mMonto" placeholder="0.00" min="0" step="0.01" style="flex:1" oninput="updateAprobadorHint()">
+        <input type="text" inputmode="decimal" id="mMonto" placeholder="0,00" style="flex:1" oninput="onMontoInput(this); updateAprobadorHint()">
       </div>
       <div id="tcWrap" style="display:none;">
         <label>Tipo de cambio (1 USD = X ARS)</label>
         <div style="display:flex; gap:8px; align-items:flex-start;">
-          <input type="number" id="mTC" placeholder="Ej: 1050" min="0" step="0.01" style="flex:1" oninput="updateAprobadorHint()">
+          <input type="text" inputmode="decimal" id="mTC" placeholder="Ej: 1.050" style="flex:1" oninput="onMontoInput(this); updateAprobadorHint()">
           <button type="button" id="btnTC" onclick="fetchTipoCambio()" style="flex-shrink:0; padding:11px 14px; border-radius:8px; border:1.5px solid var(--azul); background:transparent; color:var(--azul); font-family:'Poppins',sans-serif; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">↻ Actualizar</button>
         </div>
         <div class="field-hint" id="tcSourceHint" style="margin-top:4px;"></div>
@@ -622,6 +622,33 @@ function formatMontoFactura(f) {
 }
 function formatDate(iso) { if (!iso) return '—'; return new Date(iso).toLocaleDateString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric'}); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+// Formateo de montos con puntos de miles mientras se escribe (estilo es-AR: 5.200.000,50)
+function onMontoInput(input) {
+  const cursorFromEnd = input.value.length - input.selectionStart;
+  const raw = input.value;
+  // Permite solo dígitos y una coma decimal
+  let cleaned = raw.replace(/[^\d,]/g, '');
+  const parts = cleaned.split(',');
+  let intPart = parts[0].replace(/^0+(?=\d)/, '');
+  let decPart = parts.length > 1 ? parts.slice(1).join('').slice(0, 2) : null;
+  if (!intPart) intPart = '';
+  const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  let formatted = formattedInt;
+  if (decPart !== null) formatted += ',' + decPart;
+  input.value = formatted;
+  const newPos = Math.max(0, formatted.length - cursorFromEnd);
+  input.setSelectionRange(newPos, newPos);
+}
+
+function getMontoNumerico(idOrValue) {
+  const str = typeof idOrValue === 'string' && document.getElementById(idOrValue)
+    ? document.getElementById(idOrValue).value
+    : idOrValue;
+  if (!str) return NaN;
+  const normalized = String(str).replace(/\./g, '').replace(',', '.');
+  return parseFloat(normalized);
+}
 
 async function checkOverdueFacturas() {
   for (const f of facturas) {
@@ -1087,7 +1114,8 @@ async function fetchTipoCambio() {
     const data = await res.json();
     const valor = data.venta || data.promedio || data.compra;
     if (!valor) throw new Error('sin valor');
-    document.getElementById('mTC').value = valor;
+    const tcInput = document.getElementById('mTC');
+    tcInput.value = Number(valor).toLocaleString('es-AR', {minimumFractionDigits:2,maximumFractionDigits:2});
     hint.style.color = '#15803d';
     hint.textContent = '✓ Dólar oficial (BCRA) — venta $' + valor + ' al ' + (data.fechaActualizacion ? new Date(data.fechaActualizacion).toLocaleDateString('es-AR') : 'hoy');
     updateAprobadorHint();
@@ -1109,9 +1137,9 @@ function getMontoUSD(monto, moneda, tc) {
 }
 
 function updateAprobadorHint() {
-  const m = parseFloat(document.getElementById('mMonto').value);
+  const m = getMontoNumerico('mMonto');
   const moneda = document.getElementById('mMoneda').value;
-  const tc = parseFloat(document.getElementById('mTC').value);
+  const tc = getMontoNumerico('mTC');
   const hint = document.getElementById('aprobadorHint');
   if (!m || m <= 0) { hint.style.display = 'none'; return; }
   if (moneda === 'ARS' && (!tc || tc <= 0)) {
@@ -1171,9 +1199,9 @@ function handleFiles(fileList) {
 async function crearFactura() {
   const proveedor = document.getElementById('mProveedor').value.trim();
   const numFactura = document.getElementById('mNumFact').value.trim();
-  const monto = parseFloat(document.getElementById('mMonto').value);
+  const monto = getMontoNumerico('mMonto');
   const moneda = document.getElementById('mMoneda').value;
-  const tc = parseFloat(document.getElementById('mTC').value);
+  const tc = getMontoNumerico('mTC');
   const concepto = document.getElementById('mConcepto').value.trim();
   const fechaFactura = document.getElementById('mFecha').value;
   const cargadoPor = document.getElementById('mCargadoPor').value.trim();
