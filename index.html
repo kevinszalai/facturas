@@ -148,6 +148,7 @@
 
   .info-grid { background: var(--white); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; box-shadow: var(--shadow); }
   .ig-title { font-size: 12px; font-weight: 600; color: var(--gray-500); letter-spacing: .8px; text-transform: uppercase; margin-bottom: 16px; }
+  .ig-title-toggle:hover { color: var(--azul); }
   .ig-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .ig-label { font-size: 10px; color: var(--gray-400); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px; }
   .ig-value { font-size: 13px; color: var(--gray-900); font-weight: 500; }
@@ -520,6 +521,36 @@ async function dbSave(f) {
   }
 }
 
+async function dbDelete(id) {
+  try {
+    const r = await fetch(FIREBASE_URL + '/facturas/' + id + '.json', { method: 'DELETE' });
+    if (!r.ok) throw new Error('fb');
+  } catch (err) {
+    const all = await dbGet();
+    const filtered = all.filter(function(x) { return x.id !== id; });
+    localStorage.setItem('ua_facturas', JSON.stringify(filtered));
+  }
+}
+
+async function eliminarFactura(id) {
+  const f = facturas.find(function(x) { return x.id === id; });
+  if (!f) return;
+  const ok = confirm('¿Eliminar definitivamente la factura Nº ' + (f.numFactura||'—') + ' de ' + (f.proveedor||'—') + '?\n\nEsta acción no se puede deshacer.');
+  if (!ok) return;
+  try {
+    await dbDelete(id);
+    facturas = facturas.filter(function(x) { return x.id !== id; });
+    if (selectedId === id) selectedId = null;
+    addNotifLog('🗑 Factura ' + (f.numFactura||'—') + ' eliminada', 'error', null);
+    showToast('Factura eliminada', 'success');
+    renderList(); renderDetail();
+  } catch (err) {
+    console.error('Error eliminando factura:', err);
+    alert('No se pudo eliminar la factura. Revisá la consola del navegador (F12) para más detalles.');
+  }
+}
+
+
 const STEPS = [
   { id: 'aprobacion_inicial', label: 'Aprobación inicial', area: 'Aprobadores', emailKey: null },
   { id: 'orden_compra',       label: 'Orden de compra',   area: 'Compras',      emailKey: 'compras' },
@@ -529,7 +560,12 @@ const STEPS = [
   { id: 'tesoreria',          label: 'Tesorería / Pago',  area: 'Tesorería',    emailKey: 'tesoreria' }
 ];
 
-let facturas = [], selectedId = null, activeFilter = 'all', pdfFiles = [], notifLog = [];
+let facturas = [], selectedId = null, activeFilter = 'all', pdfFiles = [], notifLog = [], datosFacturaOpen = false;
+
+function toggleDatosFactura() {
+  datosFacturaOpen = !datosFacturaOpen;
+  renderDetail();
+}
 
 async function init() {
   facturas = await dbGet();
@@ -859,7 +895,7 @@ function renderList() {
   }).join('');
 }
 
-function selectFactura(id) { selectedId = id; renderList(); renderDetail(); }
+function selectFactura(id) { selectedId = id; datosFacturaOpen = false; renderList(); renderDetail(); }
 
 function buildPayCountdown(f) {
   const paid = !!(f.steps.tesoreria && f.steps.tesoreria.status);
@@ -920,7 +956,13 @@ function renderDetail() {
       : '<span class="ac-badge badge-esperando">' + (f.rechazada ? '—' : 'Esperando') + '</span>';
     let body = '';
     if (done) {
-      body = '<div class="ac-by">Por: <strong>' + (stepData.by||'—') + '</strong></div>' +
+      const dualInfo = (stepData.baron && stepData.napal)
+        ? '<div style="display:flex; gap:8px; margin-bottom:8px;">' +
+          '<div style="flex:1; padding:7px 10px; border-radius:7px; font-size:11px; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0;">✓ Diego Barón — ' + formatDate(stepData.baron.date) + '</div>' +
+          '<div style="flex:1; padding:7px 10px; border-radius:7px; font-size:11px; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0;">✓ Leonardo Napal — ' + formatDate(stepData.napal.date) + '</div>' +
+          '</div>'
+        : '';
+      body = dualInfo + '<div class="ac-by">Por: <strong>' + (stepData.by||'—') + '</strong></div>' +
         '<div class="ac-date-done">📅 ' + formatDate(stepData.date) + '</div>' +
         (stepData.nota ? '<div style="font-size:12px;color:#64748b;margin-top:6px;">Nota: ' + stepData.nota + '</div>' : '') +
         (stepData.numOC ? '<div style="font-size:12px;color:#64748b;margin-top:4px;">Nº OC: <strong>' + stepData.numOC + '</strong></div>' : '') +
@@ -955,12 +997,15 @@ function renderDetail() {
     '<div class="detail-h1">' + (f.proveedor||'—') + '</div>' +
     '<div class="detail-sub">Factura Nº ' + (f.numFactura||'—') + ' · Cargado por ' + (f.cargadoPor||'—') + (personaEmail ? ' (' + personaEmail + ')' : '') + ' · ' + formatDate(f.createdAt) + '</div>' +
     '</div><div style="text-align:right">' +
+    '<div style="display:flex; align-items:center; gap:10px; justify-content:flex-end;">' +
     '<div class="detail-monto">' + formatMontoFactura(f) + '</div>' +
+    '<button onclick="eliminarFactura(\'' + f.id + '\')" title="Eliminar factura" style="background:transparent; border:1.5px solid var(--gray-200); color:var(--danger); width:34px; height:34px; border-radius:8px; cursor:pointer; font-size:14px; flex-shrink:0;">🗑</button>' +
+    '</div>' +
     '<div class="detail-monto-label">Aprobadores: ' + getAprobador(f.montoUSD != null ? f.montoUSD : f.monto).join(' + ') + '</div>' +
     '</div></div>' +
     buildPayCountdown(f) +
     '<div class="progress-track"><div class="pt-title">Progreso del proceso</div><div class="steps-visual">' + stepsHtml + '</div></div>' +
-    '<div class="info-grid"><div class="ig-title">Datos de la factura</div><div class="ig-fields">' +
+    '<div class="info-grid"><div class="ig-title ig-title-toggle" onclick="toggleDatosFactura()" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; margin-bottom:' + (datosFacturaOpen ? '16px' : '0') + ';">Datos de la factura <span style="font-size:10px; transition:transform .2s; transform:rotate(' + (datosFacturaOpen ? '180deg' : '0deg') + ');">▼</span></div><div class="ig-fields" style="display:' + (datosFacturaOpen ? 'grid' : 'none') + ';">' +
     '<div class="ig-field"><div class="ig-label">Proveedor</div><div class="ig-value">' + (f.proveedor||'—') + '</div></div>' +
     '<div class="ig-field"><div class="ig-label">Nº Factura</div><div class="ig-value">' + (f.numFactura||'—') + '</div></div>' +
     '<div class="ig-field"><div class="ig-label">Monto</div><div class="ig-value">' + formatMontoFactura(f) + '</div></div>' +
@@ -975,25 +1020,45 @@ function renderDetail() {
 function buildStepForm(stepId, idx, f, aprobadores) {
   const today = new Date().toISOString().split('T')[0];
   const apStr = aprobadores.length > 1 ? 'es' : '';
-  if (stepId === 'aprobacion_inicial') return '<div class="ac-form">' +
-    '<div style="font-size:13px;color:#64748b;margin-bottom:4px;">Aprobador' + apStr + ': <strong>' + aprobadores.join(' y ') + '</strong></div>' +
-    '<label>Aprobado por</label><input type="text" id="sf_by" value="' + aprobadores[0] + '">' +
-    '<label>Fecha</label><input type="date" id="sf_date" value="' + today + '">' +
-    '<label>Nota (opcional)</label><textarea id="sf_nota" placeholder="Observaciones..."></textarea>' +
-    '<div class="btn-row"><button class="btn-aprobar" onclick="completeStep(\'' + stepId + '\')">✓ Aprobar</button><button class="btn-rechazar" onclick="rechazarStep(\'' + stepId + '\')">✗ Rechazar</button></div></div>';
-  if (stepId === 'orden_compra') return '<div class="ac-form">' +
-    '<label>Número de Orden de Compra</label><input type="text" id="sf_numOC" placeholder="Ej: OC-2024-0158">' +
-    '<label>Generado por (Compras)</label><input type="text" id="sf_by" placeholder="Nombre">' +
-    '<label>Fecha</label><input type="date" id="sf_date" value="' + today + '">' +
-    '<label>Nota (opcional)</label><textarea id="sf_nota" placeholder="Observaciones..."></textarea>' +
-    '<button class="btn-aprobar" onclick="completeStep(\'' + stepId + '\')">✓ Generar OC</button></div>';
-  if (stepId === 'aprobacion_oc') return '<div class="ac-form">' +
-    '<div style="font-size:13px;color:#64748b;margin-bottom:4px;">Aprobador' + apStr + ': <strong>' + aprobadores.join(' y ') + '</strong></div>' +
-    '<div style="font-size:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;color:#15803d;">OC Nº <strong>' + ((f.steps.orden_compra && f.steps.orden_compra.numOC) || '—') + '</strong></div>' +
-    '<label>Aprobado por</label><input type="text" id="sf_by" value="' + aprobadores[0] + '">' +
-    '<label>Fecha</label><input type="date" id="sf_date" value="' + today + '">' +
-    '<label>Nota (opcional)</label><textarea id="sf_nota" placeholder="Observaciones..."></textarea>' +
-    '<div class="btn-row"><button class="btn-aprobar" onclick="completeStep(\'' + stepId + '\')">✓ Aprobar OC</button><button class="btn-rechazar" onclick="rechazarStep(\'' + stepId + '\')">✗ Rechazar</button></div></div>';
+  if (stepId === 'aprobacion_inicial' || stepId === 'aprobacion_oc') {
+    const isOC = stepId === 'aprobacion_oc';
+    const dual = aprobadores.length > 1; // true si monto >= USD 2000 (Barón + Napal)
+    const ocBox = isOC ? '<div style="font-size:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;color:#15803d;margin-bottom:4px;">OC Nº <strong>' + ((f.steps.orden_compra && f.steps.orden_compra.numOC) || '—') + '</strong></div>' : '';
+    const verbo = isOC ? 'Aprobar OC' : 'Aprobar';
+
+    if (!dual) {
+      // Un solo aprobador (Urquieta, < USD 2000)
+      return '<div class="ac-form">' + ocBox +
+        '<div style="font-size:13px;color:#64748b;margin-bottom:4px;">Aprobador: <strong>' + aprobadores[0] + '</strong></div>' +
+        '<label>Aprobado por</label><input type="text" id="sf_by" value="' + aprobadores[0] + '">' +
+        '<label>Fecha</label><input type="date" id="sf_date" value="' + today + '">' +
+        '<label>Nota (opcional)</label><textarea id="sf_nota" placeholder="Observaciones..."></textarea>' +
+        '<div class="btn-row"><button class="btn-aprobar" onclick="completeStep(\'' + stepId + '\')">✓ ' + verbo + '</button><button class="btn-rechazar" onclick="rechazarStep(\'' + stepId + '\')">✗ Rechazar</button></div></div>';
+    }
+
+    // Doble aprobación secuencial: Diego Barón primero, Leonardo Napal después
+    const stepData = f.steps[stepId];
+    const baronDone = stepData && stepData.baron;
+    const napalDone = stepData && stepData.napal;
+
+    let progresoHtml = '<div style="display:flex; gap:8px; margin-bottom:12px;">' +
+      '<div style="flex:1; padding:8px 12px; border-radius:8px; font-size:12px; font-weight:600; ' + (baronDone ? 'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;' : 'background:var(--gray-100);color:var(--gray-500);border:1px solid var(--gray-200);') + '">' + (baronDone ? '✓' : '①') + ' Diego Barón' + (baronDone ? ' — ' + formatDate(stepData.baron.date) : ' — pendiente') + '</div>' +
+      '<div style="flex:1; padding:8px 12px; border-radius:8px; font-size:12px; font-weight:600; ' + (napalDone ? 'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;' : 'background:var(--gray-100);color:var(--gray-500);border:1px solid var(--gray-200);') + '">' + (napalDone ? '✓' : '②') + ' Leonardo Napal' + (napalDone ? ' — ' + formatDate(stepData.napal.date) : ' — pendiente') + '</div>' +
+      '</div>';
+
+    if (!baronDone) {
+      return '<div class="ac-form">' + ocBox + progresoHtml +
+        '<div style="font-size:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px 12px;color:#1d4ed8;">Primero debe aprobar <strong>Diego Barón</strong>. Luego se habilitará la aprobación de Leonardo Napal.</div>' +
+        '<label>Fecha</label><input type="date" id="sf_date" value="' + today + '">' +
+        '<label>Nota (opcional)</label><textarea id="sf_nota" placeholder="Observaciones..."></textarea>' +
+        '<div class="btn-row"><button class="btn-aprobar" onclick="completeStep(\'' + stepId + '\')">✓ Diego Barón aprueba</button><button class="btn-rechazar" onclick="rechazarStep(\'' + stepId + '\')">✗ Rechazar</button></div></div>';
+    }
+    return '<div class="ac-form">' + ocBox + progresoHtml +
+      '<div style="font-size:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px 12px;color:#1d4ed8;">Diego Barón ya aprobó. Falta la aprobación de <strong>Leonardo Napal</strong> para continuar.</div>' +
+      '<label>Fecha</label><input type="date" id="sf_date" value="' + today + '">' +
+      '<label>Nota (opcional)</label><textarea id="sf_nota" placeholder="Observaciones..."></textarea>' +
+      '<div class="btn-row"><button class="btn-aprobar" onclick="completeStep(\'' + stepId + '\')">✓ Leonardo Napal aprueba</button><button class="btn-rechazar" onclick="rechazarStep(\'' + stepId + '\')">✗ Rechazar</button></div></div>';
+  }
   if (stepId === 'asociacion') return '<div class="ac-form">' +
     '<div style="font-size:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px 12px;color:#1d4ed8;">Factura <strong>Nº ' + f.numFactura + '</strong> → OC <strong>' + ((f.steps.orden_compra && f.steps.orden_compra.numOC) || '—') + '</strong></div>' +
     '<label>Asociado por (Proveedores)</label><input type="text" id="sf_by" placeholder="Nombre">' +
@@ -1018,13 +1083,43 @@ function buildStepForm(stepId, idx, f, aprobadores) {
 async function completeStep(stepId) {
   const f = facturas.find(function(x) { return x.id === selectedId; });
   if (!f) return;
-  const by = (document.getElementById('sf_by') || {}).value;
   const date = (document.getElementById('sf_date') || {}).value;
   const nota = (document.getElementById('sf_nota') || {}).value;
   const numOC = (document.getElementById('sf_numOC') || {}).value;
   const numPago = (document.getElementById('sf_numPago') || {}).value;
   const ivaOkEl = document.getElementById('sf_ivaOk');
   const ivaOk = ivaOkEl ? ivaOkEl.value === 'true' : undefined;
+
+  const isDualApproval = (stepId === 'aprobacion_inicial' || stepId === 'aprobacion_oc') && getAprobador(f.montoUSD != null ? f.montoUSD : f.monto).length > 1;
+
+  if (isDualApproval) {
+    const existing = f.steps[stepId] || {};
+    if (!existing.baron) {
+      f.steps[stepId] = Object.assign({}, existing, { baron: { by: 'Diego Barón', date: date, nota: (nota||'').trim(), doneAt: Date.now() } });
+      await dbSave(f);
+      addNotifLog('✓ Diego Barón aprobó "' + (STEPS.find(function(s){return s.id===stepId;}).label) + '" en factura ' + f.numFactura, 'info', f.id);
+      const napalEmail = config.emails.napal;
+      const personaEmail0 = getPersonaEmail(f.cargadoPor);
+      let emails0 = [napalEmail].filter(Boolean);
+      if (personaEmail0 && emails0.indexOf(personaEmail0) === -1) emails0.push(personaEmail0);
+      const msg0 = 'Diego Barón aprobó la factura ' + f.numFactura + ' (' + f.proveedor + '). Ahora requiere la aprobación de Leonardo Napal.';
+      sendPushNotif('Falta aprobación de Leonardo Napal', msg0);
+      if (emails0.length) await sendEmail(emails0, 'Tu aprobación requerida: Factura ' + f.numFactura, msg0, f);
+      showToast('✓ Diego Barón aprobó. Falta Leonardo Napal.', 'success');
+      renderList(); renderDetail();
+      return;
+    } else if (!existing.napal) {
+      f.steps[stepId] = Object.assign({}, existing, { napal: { by: 'Leonardo Napal', date: date, nota: (nota||'').trim(), doneAt: Date.now() }, status: 'done', by: 'Diego Barón y Leonardo Napal', date: date, nota: (nota||'').trim(), doneAt: Date.now() });
+      await dbSave(f);
+      showToast('✓ Ambos aprobaron. Paso completado.', 'success');
+      await avanzarSiguientePaso(f, stepId);
+      renderList(); renderDetail();
+      return;
+    }
+    return; // ya estaba completo
+  }
+
+  const by = (document.getElementById('sf_by') || {}).value;
   const byTrim = by ? by.trim() : '';
   if (!byTrim) { alert('Ingresá el nombre del responsable.'); return; }
   if (stepId === 'orden_compra' && !(numOC && numOC.trim())) { alert('Ingresá el número de OC.'); return; }
@@ -1036,6 +1131,12 @@ async function completeStep(stepId) {
   if (ivaOk !== undefined) f.steps[stepId].ivaOk = ivaOk;
   await dbSave(f);
 
+  showToast('✓ Paso completado', 'success');
+  await avanzarSiguientePaso(f, stepId);
+  renderList(); renderDetail();
+}
+
+async function avanzarSiguientePaso(f, stepId) {
   const curIdx = STEPS.findIndex(function(s) { return s.id === stepId; });
   const nextStep = STEPS[curIdx + 1];
   if (nextStep) {
@@ -1053,16 +1154,22 @@ async function completeStep(stepId) {
     sendPushNotif('Factura completada ✓', 'La factura ' + f.numFactura + ' de ' + f.proveedor + ' completó todo el proceso.');
     if (personaEmail) await sendEmail([personaEmail], '✅ Factura ' + f.numFactura + ' completada', 'Tu factura ' + f.numFactura + ' de ' + f.proveedor + ' completó todo el proceso de aprobación y pago.', f);
   }
-
-  showToast('✓ Paso completado', 'success');
-  renderList(); renderDetail();
 }
 
 async function rechazarStep(stepId) {
   const f = facturas.find(function(x) { return x.id === selectedId; });
   if (!f) return;
   const byEl = document.getElementById('sf_by');
-  const by = (byEl && byEl.value.trim()) || '—';
+  let by = (byEl && byEl.value.trim()) || '';
+  if (!by) {
+    const isDualApproval = (stepId === 'aprobacion_inicial' || stepId === 'aprobacion_oc') && getAprobador(f.montoUSD != null ? f.montoUSD : f.monto).length > 1;
+    if (isDualApproval) {
+      const existing = f.steps[stepId] || {};
+      by = existing.baron ? 'Leonardo Napal' : 'Diego Barón';
+    } else {
+      by = '—';
+    }
+  }
   const motivo = prompt('Motivo del rechazo:');
   if (!motivo) return;
   f.rechazada = true;
