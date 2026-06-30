@@ -503,10 +503,20 @@ async function dbSave(f) {
     const r = await fetch(FIREBASE_URL + '/facturas/' + f.id + '.json', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(f) });
     if (!r.ok) throw new Error('fb');
   } catch (err) {
-    const all = await dbGet();
-    const idx = all.findIndex(function(x) { return x.id === f.id; });
-    if (idx >= 0) all[idx] = f; else all.push(f);
-    localStorage.setItem('ua_facturas', JSON.stringify(all));
+    try {
+      const all = await dbGet();
+      const idx = all.findIndex(function(x) { return x.id === f.id; });
+      if (idx >= 0) all[idx] = f; else all.push(f);
+      localStorage.setItem('ua_facturas', JSON.stringify(all));
+    } catch (localErr) {
+      console.error('Error guardando factura:', localErr);
+      if (localErr && localErr.name === 'QuotaExceededError') {
+        alert('No se pudo guardar la factura: los archivos PDF adjuntos son demasiado pesados para el almacenamiento local. Probá con archivos más livianos o menos cantidad.');
+      } else {
+        alert('Ocurrió un error guardando la factura. Revisá la consola del navegador (F12) para más detalles.');
+      }
+      throw localErr;
+    }
   }
 }
 
@@ -1211,32 +1221,43 @@ async function crearFactura() {
   if (moneda === 'ARS' && (!tc || tc <= 0)) { alert('Ingresá el tipo de cambio para convertir a USD.'); return; }
   if (!cargadoPor) { alert('Ingresá tu nombre.'); return; }
 
-  const montoUSD = getMontoUSD(monto, moneda, tc);
+  const btn = document.querySelector('.btn-submit');
+  const btnOriginal = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = 'Guardando...'; btn.disabled = true; }
 
-  const nueva = {
-    id: uid(), proveedor: proveedor, numFactura: numFactura,
-    monto: monto, moneda: moneda, tc: moneda === 'ARS' ? tc : null, montoUSD: montoUSD,
-    concepto: concepto, fechaFactura: fechaFactura, cargadoPor: cargadoPor, createdAt: Date.now(), steps: {},
-    rechazada: false, pdfFiles: pdfFiles.slice()
-  };
-  facturas.push(nueva);
-  await dbSave(nueva);
+  try {
+    const montoUSD = getMontoUSD(monto, moneda, tc);
 
-  const aps = getAprobador(montoUSD);
-  const apEmails = getAprobadorEmails(montoUSD);
-  const personaEmail = getPersonaEmail(cargadoPor);
-  const montoStr = (moneda === 'ARS') ? formatMontoARS(monto) + ' (≈ ' + formatMonto(montoUSD) + ')' : formatMonto(monto);
-  const msg = 'Nueva factura ingresada: ' + numFactura + ' · ' + proveedor + ' · ' + montoStr + '. Requiere aprobación de ' + aps.join(' y ') + '.';
-  addNotifLog('🆕 Nueva factura ' + numFactura + ' (' + proveedor + ') esperando aprobación', 'info', nueva.id);
-  sendPushNotif('Nueva factura ingresada · UA', msg);
-  let emails = apEmails.slice();
-  if (personaEmail && emails.indexOf(personaEmail) === -1) emails.push(personaEmail);
-  if (emails.length) await sendEmail(emails, 'Nueva factura para aprobar: ' + numFactura + ' · ' + proveedor, msg, nueva);
+    const nueva = {
+      id: uid(), proveedor: proveedor, numFactura: numFactura,
+      monto: monto, moneda: moneda, tc: moneda === 'ARS' ? tc : null, montoUSD: montoUSD,
+      concepto: concepto, fechaFactura: fechaFactura, cargadoPor: cargadoPor, createdAt: Date.now(), steps: {},
+      rechazada: false, pdfFiles: pdfFiles.slice()
+    };
+    facturas.push(nueva);
+    await dbSave(nueva);
 
-  closeModal();
-  selectedId = nueva.id;
-  showToast('✓ Factura creada', 'success');
-  renderList(); renderDetail();
+    const aps = getAprobador(montoUSD);
+    const apEmails = getAprobadorEmails(montoUSD);
+    const personaEmail = getPersonaEmail(cargadoPor);
+    const montoStr = (moneda === 'ARS') ? formatMontoARS(monto) + ' (≈ ' + formatMonto(montoUSD) + ')' : formatMonto(monto);
+    const msg = 'Nueva factura ingresada: ' + numFactura + ' · ' + proveedor + ' · ' + montoStr + '. Requiere aprobación de ' + aps.join(' y ') + '.';
+    addNotifLog('🆕 Nueva factura ' + numFactura + ' (' + proveedor + ') esperando aprobación', 'info', nueva.id);
+    sendPushNotif('Nueva factura ingresada · UA', msg);
+    let emails = apEmails.slice();
+    if (personaEmail && emails.indexOf(personaEmail) === -1) emails.push(personaEmail);
+    if (emails.length) await sendEmail(emails, 'Nueva factura para aprobar: ' + numFactura + ' · ' + proveedor, msg, nueva);
+
+    closeModal();
+    selectedId = nueva.id;
+    showToast('✓ Factura creada', 'success');
+    renderList(); renderDetail();
+  } catch (err) {
+    console.error('Error al crear factura:', err);
+    alert('No se pudo crear la factura. Revisá la consola del navegador (F12 → Console) para ver el detalle del error.');
+  } finally {
+    if (btn) { btn.textContent = btnOriginal; btn.disabled = false; }
+  }
 }
 
 init();
